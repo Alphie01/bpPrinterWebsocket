@@ -157,30 +157,111 @@ def get_connection_type() -> PrinterConnectionType:
         return PrinterConnectionType.AUTO
 
 
+def test_serial_port(port: str, baud_rate: int = 9600, timeout: float = 1.0) -> bool:
+    """Test if a serial port is accessible and working"""
+    if not SERIAL_AVAILABLE:
+        logger.error("PySerial not available for port testing")
+        return False
+    
+    try:
+        logger.info(f"Testing port {port} with baud rate {baud_rate}...")
+        
+        # Try to open the port with minimal timeout
+        with serial.Serial(port, baud_rate, timeout=timeout) as ser:
+            logger.info(f"Port {port} opened successfully")
+            
+            # Test if port is readable/writable
+            if ser.is_open:
+                logger.info(f"Port {port} is open and ready")
+                return True
+            else:
+                logger.warning(f"Port {port} failed to open properly")
+                return False
+                
+    except serial.SerialException as e:
+        logger.error(f"SerialException on port {port}: {e}")
+        if "permission" in str(e).lower() or "access" in str(e).lower():
+            logger.error(f"Permission denied for port {port}. Port may be in use by another application.")
+        elif "not exist" in str(e).lower() or "cannot find" in str(e).lower():
+            logger.error(f"Port {port} does not exist or is not available.")
+        return False
+    except PermissionError as e:
+        logger.error(f"Permission error on port {port}: {e}")
+        logger.error("Try running as administrator or close other applications using this port")
+        return False
+    except Exception as e:
+        logger.error(f"Unexpected error testing port {port}: {e}")
+        return False
+
+
+def find_working_serial_port() -> Optional[str]:
+    """Find the first working serial port"""
+    if not SERIAL_AVAILABLE:
+        return None
+    
+    try:
+        ports = list(serial.tools.list_ports.comports())
+        if not ports:
+            logger.warning("No serial ports found")
+            return None
+        
+        logger.info(f"Testing {len(ports)} available serial port(s)...")
+        
+        for port_info in ports:
+            port_device = port_info.device
+            logger.info(f"Testing {port_device}: {port_info.description}")
+            
+            # Skip ports that are likely not printers
+            description_lower = port_info.description.lower()
+            if any(skip_word in description_lower for skip_word in ['bluetooth', 'virtual', 'emulated']):
+                logger.info(f"Skipping {port_device} - appears to be virtual/bluetooth device")
+                continue
+            
+            if test_serial_port(port_device):
+                logger.info(f"Found working port: {port_device}")
+                return port_device
+            else:
+                logger.warning(f"Port {port_device} is not accessible")
+        
+        logger.error("No working serial ports found")
+        return None
+        
+    except Exception as e:
+        logger.error(f"Error scanning for working ports: {e}")
+        return None
+
+
 def auto_detect_serial_port() -> Optional[str]:
     """Auto-detect the first available serial port"""
     try:
         available_printers = list_all_printers()
         if available_printers and available_printers.get('serial'):
             port = available_printers['serial'][0]
-            logger.info(f"Auto-detected serial port: {port}")
-            return port
-        else:
-            # Fallback: Try common serial ports
-            if SERIAL_AVAILABLE:
-                ports = list(serial.tools.list_ports.comports())
-                if ports:
-                    # Sort ports to prefer lower numbered COM ports on Windows
-                    if platform.system().lower() == 'windows':
-                        ports = sorted(ports, key=lambda x: x.device)
-                    
-                    port = ports[0].device
-                    logger.info(f"Fallback: Using first available port: {port} - {ports[0].description}")
-                    return port
-                else:
-                    logger.warning("No serial ports found on system")
+            logger.info(f"Auto-detected serial port from list_all_printers: {port}")
+            
+            # Test if the detected port actually works
+            if test_serial_port(port):
+                return port
             else:
-                logger.warning("PySerial not available for port detection")
+                logger.warning(f"Detected port {port} is not accessible, trying fallback...")
+        
+        # Fallback: Find a working serial port
+        logger.info("Trying to find any working serial port...")
+        working_port = find_working_serial_port()
+        if working_port:
+            return working_port
+        
+        # Final fallback: Try common ports with better error handling
+        if platform.system().lower() == 'windows' and SERIAL_AVAILABLE:
+            logger.info("Trying common Windows COM ports as last resort...")
+            for com_port in ['COM1', 'COM2', 'COM3', 'COM4', 'COM5', 'COM6', 'COM7', 'COM8']:
+                logger.info(f"Checking {com_port}...")
+                if test_serial_port(com_port, timeout=0.5):
+                    logger.info(f"Found working COM port: {com_port}")
+                    return com_port
+        
+        logger.warning("No accessible serial ports found")
+            
     except Exception as e:
         logger.error(f"Error detecting serial ports: {e}")
     return None
@@ -244,21 +325,35 @@ def create_printer_config() -> PrinterConfig:
     
     # Handle serial port configuration
     serial_port = os.getenv('SERIAL_PORT')
-    if not serial_port and connection_type in [PrinterConnectionType.SERIAL, PrinterConnectionType.AUTO]:
+    if serial_port:
+        # Test the specified port
+        logger.info(f"Testing specified serial port: {serial_port}")
+        if not test_serial_port(serial_port, baud_rate):
+            logger.error(f"Specified serial port {serial_port} is not accessible!")
+            logger.error("Common solutions:")
+            logger.error("1. Close any other applications using this port (Arduino IDE, PuTTY, etc.)")
+            logger.error("2. Check Device Manager for port conflicts")
+            logger.error("3. Try running as Administrator")
+            logger.error("4. Disconnect and reconnect the printer")
+            logger.error("5. Try a different USB port")
+            
+            # Ask if user wants to try auto-detection
+            if connection_type in [PrinterConnectionType.SERIAL, PrinterConnectionType.AUTO]:
+                logger.info("Attempting to find an alternative working port...")
+                auto_port = auto_detect_serial_port()
+                if auto_port and auto_port != serial_port:
+                    logger.info(f"Found alternative working port: {auto_port}")
+                    serial_port = auto_port
+                else:
+                    logger.warning("No alternative ports found")
+                    serial_port = None
+            else:
+                serial_port = None
+    elif connection_type in [PrinterConnectionType.SERIAL, PrinterConnectionType.AUTO]:
+        logger.info("No serial port specified, attempting auto-detection...")
         serial_port = auto_detect_serial_port()
         if not serial_port:
-            logger.warning("No serial port specified and auto-detection failed")
-            # For Windows, try common COM ports as fallback
-            if platform.system().lower() == 'windows' and SERIAL_AVAILABLE:
-                for com_port in ['COM1', 'COM2', 'COM3', 'COM4', 'COM5', 'COM6', 'COM7', 'COM8']:
-                    try:
-                        test_serial = serial.Serial(com_port, timeout=0.1)
-                        test_serial.close()
-                        serial_port = com_port
-                        logger.info(f"Found working COM port: {com_port}")
-                        break
-                    except Exception:
-                        continue
+            logger.warning("No working serial port found during auto-detection")
     
     # Handle USB configuration
     usb_vendor_id = None
@@ -338,13 +433,21 @@ def list_available_ports():
                     logger.info(f"      Description: {port.description}")
                     logger.info(f"      Hardware ID: {port.hwid if hasattr(port, 'hwid') else 'N/A'}")
                     
-                    # Test if port is accessible
+                    # Test if port is accessible with better error reporting
                     try:
-                        test_serial = serial.Serial(port.device, timeout=0.1)
-                        test_serial.close()
-                        logger.info(f"      Status: Available ✓")
+                        with serial.Serial(port.device, timeout=0.1) as test_ser:
+                            logger.info(f"      Status: Available ✓")
+                    except serial.SerialException as e:
+                        if "permission" in str(e).lower() or "access" in str(e).lower():
+                            logger.info(f"      Status: ❌ Permission denied - Port in use")
+                        elif "not exist" in str(e).lower():
+                            logger.info(f"      Status: ❌ Port does not exist")
+                        else:
+                            logger.info(f"      Status: ❌ Error - {e}")
+                    except PermissionError:
+                        logger.info(f"      Status: ❌ Permission denied - Port in use")
                     except Exception as e:
-                        logger.info(f"      Status: Busy or Error - {e}")
+                        logger.info(f"      Status: ❌ Error - {e}")
                     logger.info("")
         except Exception as e:
             logger.error(f"Error listing serial ports: {e}")
@@ -446,36 +549,50 @@ async def main():
             logger.warning("No printer connection configured.")
             
             # Try to find any available printers as last resort
-            logger.info("Attempting to find any available printers...")
+            logger.info("Attempting emergency port detection...")
             try:
                 if SERIAL_AVAILABLE:
-                    ports = list(serial.tools.list_ports.comports())
-                    if ports:
-                        logger.info("Available serial ports found:")
-                        for i, port in enumerate(ports):
-                            logger.info(f"  {i}: {port.device} - {port.description}")
-                        
-                        # Use the first available port
-                        first_port = ports[0].device
-                        logger.info(f"Using first available port: {first_port}")
-                        
-                        # Update printer config with found port
-                        printer_config.serial_port = first_port
+                    # Use the working port finder instead of just listing
+                    working_port = find_working_serial_port()
+                    if working_port:
+                        logger.info(f"Emergency detection found working port: {working_port}")
+                        printer_config.serial_port = working_port
                         printer_config.connection_type = PrinterConnectionType.SERIAL
                         has_serial = True
                     else:
-                        logger.error("No serial ports found on this system.")
+                        logger.error("No working serial ports found during emergency detection")
                 else:
-                    logger.error("PySerial not available for port scanning.")
+                    logger.error("PySerial not available for emergency port scanning.")
             except Exception as e:
-                logger.error(f"Error scanning for ports: {e}")
+                logger.error(f"Error during emergency port detection: {e}")
             
             if not has_serial and not has_usb:
-                logger.error("No printer connections available. Please:")
-                logger.error("1. Check if printer is connected")
-                logger.error("2. Install printer drivers")
-                logger.error("3. Check Windows Device Manager for COM ports")
-                logger.error("4. Set SERIAL_PORT environment variable manually")
+                logger.error("No printer connections available.")
+                logger.error("")
+                logger.error("=== Troubleshooting Guide ===")
+                logger.error("For Serial/COM port issues:")
+                logger.error("1. Check if another application is using the port:")
+                logger.error("   - Close Arduino IDE, PuTTY, HyperTerminal, etc.")
+                logger.error("   - Close any other printer software")
+                logger.error("2. Check Windows Device Manager:")
+                logger.error("   - Look for 'Ports (COM & LPT)' section")
+                logger.error("   - Check for yellow warning icons")
+                logger.error("   - Try updating drivers")
+                logger.error("3. Hardware troubleshooting:")
+                logger.error("   - Disconnect and reconnect USB cable")
+                logger.error("   - Try different USB port")
+                logger.error("   - Check cable quality")
+                logger.error("4. Permission issues:")
+                logger.error("   - Try running as Administrator")
+                logger.error("   - Check if port is locked by Windows")
+                logger.error("5. Set specific port manually:")
+                logger.error("   - Set environment variable: SET SERIAL_PORT=COM1")
+                logger.error("   - Or add to .env file: SERIAL_PORT=COM1")
+                logger.error("")
+                logger.error("For USB direct connection:")
+                logger.error("1. Install PyUSB: pip install pyusb")
+                logger.error("2. Set USB IDs: USB_VENDOR_ID=0x0A5F USB_PRODUCT_ID=0x0164")
+                logger.error("3. Set connection type: CONNECTION_TYPE=usb")
                 return 1
         
         # Create and start the WebSocket client
