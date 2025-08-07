@@ -194,6 +194,49 @@ def test_serial_port(port: str, baud_rate: int = 9600, timeout: float = 1.0) -> 
         return False
 
 
+def force_release_port(port: str) -> bool:
+    """Attempt to force release a port that may be stuck"""
+    if not SERIAL_AVAILABLE:
+        return False
+    
+    logger.info(f"Attempting to force release port {port}...")
+    
+    try:
+        # Try multiple strategies to release the port
+        import time
+        
+        # Strategy 1: Quick open/close cycle
+        for attempt in range(3):
+            try:
+                ser = serial.Serial(port, timeout=0.1)
+                time.sleep(0.1)
+                ser.close()
+                time.sleep(0.2)
+                logger.info(f"Port release attempt {attempt + 1} completed")
+            except:
+                continue
+        
+        # Strategy 2: Try different baud rates to reset the connection
+        for baud in [9600, 19200, 38400, 115200]:
+            try:
+                ser = serial.Serial(port, baud, timeout=0.1)
+                time.sleep(0.1)
+                ser.close()
+                time.sleep(0.1)
+            except:
+                continue
+        
+        # Wait a bit for the port to be released by the system
+        time.sleep(1.0)
+        
+        # Test if the port is now available
+        return test_serial_port(port, timeout=0.5)
+        
+    except Exception as e:
+        logger.warning(f"Force release failed for port {port}: {e}")
+        return False
+
+
 def find_working_serial_port() -> Optional[str]:
     """Find the first working serial port"""
     if not SERIAL_AVAILABLE:
@@ -232,7 +275,7 @@ def find_working_serial_port() -> Optional[str]:
 
 
 def auto_detect_serial_port() -> Optional[str]:
-    """Auto-detect the first available serial port"""
+    """Auto-detect the first available serial port with enhanced recovery"""
     try:
         available_printers = list_all_printers()
         if available_printers and available_printers.get('serial'):
@@ -243,7 +286,14 @@ def auto_detect_serial_port() -> Optional[str]:
             if test_serial_port(port):
                 return port
             else:
-                logger.warning(f"Detected port {port} is not accessible, trying fallback...")
+                logger.warning(f"Detected port {port} is not accessible, trying recovery...")
+                
+                # Try to force release the port
+                if force_release_port(port):
+                    logger.info(f"Successfully recovered port {port}")
+                    return port
+                else:
+                    logger.warning(f"Could not recover port {port}, trying fallback...")
         
         # Fallback: Find a working serial port
         logger.info("Trying to find any working serial port...")
@@ -251,14 +301,20 @@ def auto_detect_serial_port() -> Optional[str]:
         if working_port:
             return working_port
         
-        # Final fallback: Try common ports with better error handling
+        # Enhanced fallback: Try to recover stuck ports
         if platform.system().lower() == 'windows' and SERIAL_AVAILABLE:
-            logger.info("Trying common Windows COM ports as last resort...")
+            logger.info("Trying common Windows COM ports with recovery...")
             for com_port in ['COM1', 'COM2', 'COM3', 'COM4', 'COM5', 'COM6', 'COM7', 'COM8']:
                 logger.info(f"Checking {com_port}...")
                 if test_serial_port(com_port, timeout=0.5):
                     logger.info(f"Found working COM port: {com_port}")
                     return com_port
+                else:
+                    # Try to recover this port
+                    logger.info(f"Attempting recovery for {com_port}...")
+                    if force_release_port(com_port):
+                        logger.info(f"Successfully recovered COM port: {com_port}")
+                        return com_port
         
         logger.warning("No accessible serial ports found")
             
@@ -569,15 +625,21 @@ async def main():
             if not has_serial and not has_usb:
                 logger.error("No printer connections available.")
                 logger.error("")
+                logger.error("🔧 QUICK FIX AVAILABLE!")
+                logger.error("Run the following command to diagnose and fix COM port issues:")
+                logger.error("    python fix_com3.py")
+                logger.error("")
                 logger.error("=== Troubleshooting Guide ===")
                 logger.error("For Serial/COM port issues:")
                 logger.error("1. Check if another application is using the port:")
                 logger.error("   - Close Arduino IDE, PuTTY, HyperTerminal, etc.")
                 logger.error("   - Close any other printer software")
+                logger.error("   - Close Zebra Setup Utilities or ZebraLink")
                 logger.error("2. Check Windows Device Manager:")
                 logger.error("   - Look for 'Ports (COM & LPT)' section")
                 logger.error("   - Check for yellow warning icons")
                 logger.error("   - Try updating drivers")
+                logger.error("   - Disable and re-enable the COM port")
                 logger.error("3. Hardware troubleshooting:")
                 logger.error("   - Disconnect and reconnect USB cable")
                 logger.error("   - Try different USB port")
@@ -588,11 +650,16 @@ async def main():
                 logger.error("5. Set specific port manually:")
                 logger.error("   - Set environment variable: SET SERIAL_PORT=COM1")
                 logger.error("   - Or add to .env file: SERIAL_PORT=COM1")
+                logger.error("6. Force release stuck port:")
+                logger.error("   - Run: python port_diagnostics.py --release COM3")
                 logger.error("")
                 logger.error("For USB direct connection:")
                 logger.error("1. Install PyUSB: pip install pyusb")
                 logger.error("2. Set USB IDs: USB_VENDOR_ID=0x0A5F USB_PRODUCT_ID=0x0164")
                 logger.error("3. Set connection type: CONNECTION_TYPE=usb")
+                logger.error("")
+                logger.error("💡 TIP: For Zebra ZD220 printers, try USB direct connection")
+                logger.error("    This bypasses COM port issues entirely!")
                 return 1
         
         # Create and start the WebSocket client
