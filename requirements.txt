@@ -1,0 +1,18 @@
+# WebSocket Printer Client Dependencies
+
+# WebSocket client library
+python-socketio[asyncio]==5.11.0
+aiohttp
+
+# Serial port communication
+pyserial==3.5
+
+# USB communication for direct printer connection
+pyusb
+
+# Additional utilities
+asyncio-mqtt==0.16.1
+
+# Development dependencies (optional)
+pytest==7.4.4
+pytest-asyncio==0.23.2
