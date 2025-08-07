@@ -42,6 +42,14 @@ except ImportError:
     SERIAL_AVAILABLE = False
     logging.warning("PySerial not available. Serial port functionality will be limited.")
 
+try:
+    import usb.core
+    import usb.util
+    USB_CORE_AVAILABLE = True
+except ImportError:
+    USB_CORE_AVAILABLE = False
+    logging.warning("PyUSB not available. USB functionality will be limited.")
+
 from config import ServerConfig
 from printer_client import WebSocketPrinterClient, PrinterConnectionType, PrinterConfig, PrinterType, list_all_printers
 
@@ -51,6 +59,91 @@ logging.basicConfig(
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+# Known printer USB IDs
+KNOWN_PRINTER_IDS = {
+    # Zebra printers
+    (0x0A5F, 0x0164): {"brand": "Zebra", "model": "ZD410/ZD420", "type": "thermal"},
+    (0x0A5F, 0x0181): {"brand": "Zebra", "model": "ZD510", "type": "thermal"},
+    (0x0A5F, 0x0049): {"brand": "Zebra", "model": "GC420t", "type": "thermal"},
+    (0x0A5F, 0x0061): {"brand": "Zebra", "model": "GK420t", "type": "thermal"},
+    (0x0A5F, 0x008A): {"brand": "Zebra", "model": "ZT410", "type": "thermal"},
+    
+    # Brother printers  
+    (0x04F9, 0x2028): {"brand": "Brother", "model": "QL-700", "type": "label"},
+    (0x04F9, 0x202A): {"brand": "Brother", "model": "QL-710W", "type": "label"},
+    (0x04F9, 0x202B): {"brand": "Brother", "model": "QL-720NW", "type": "label"},
+    
+    # Dymo printers
+    (0x0922, 0x1001): {"brand": "Dymo", "model": "LabelWriter 450", "type": "label"},
+    (0x0922, 0x1002): {"brand": "Dymo", "model": "LabelWriter 450 Turbo", "type": "label"},
+    
+    # Epson printers
+    (0x04B8, 0x0202): {"brand": "Epson", "model": "TM-T20", "type": "thermal"},
+    (0x04B8, 0x0204): {"brand": "Epson", "model": "TM-T88V", "type": "thermal"},
+}
+
+
+def find_usb_printers():
+    """Find all USB printers using vendor/product IDs"""
+    printers = []
+    
+    if not USB_CORE_AVAILABLE:
+        logger.warning("PyUSB not available. Install with: pip install pyusb")
+        return printers
+    
+    try:
+        # Find all USB devices
+        devices = usb.core.find(find_all=True)
+        
+        for device in devices:
+            vendor_id = device.idVendor
+            product_id = device.idProduct
+            
+            # Check if this is a known printer
+            printer_key = (vendor_id, product_id)
+            if printer_key in KNOWN_PRINTER_IDS:
+                printer_info = KNOWN_PRINTER_IDS[printer_key].copy()
+                printer_info.update({
+                    'vendor_id': vendor_id,
+                    'product_id': product_id,
+                    'bus': device.bus,
+                    'address': device.address,
+                    'device': device
+                })
+                printers.append(printer_info)
+                logger.info(f"Found {printer_info['brand']} {printer_info['model']} - VID:0x{vendor_id:04X} PID:0x{product_id:04X}")
+    
+    except Exception as e:
+        logger.error(f"Error scanning USB devices: {e}")
+        logger.info("Note: On Linux you may need to run with sudo or add udev rules")
+    
+    return printers
+
+
+def find_specific_usb_printer(vendor_id: int, product_id: int):
+    """Find a specific USB printer by vendor and product ID"""
+    if not USB_CORE_AVAILABLE:
+        logger.error("PyUSB not available for USB printer detection")
+        return None
+    
+    try:
+        device = usb.core.find(idVendor=vendor_id, idProduct=product_id)
+        if device is not None:
+            printer_key = (vendor_id, product_id)
+            if printer_key in KNOWN_PRINTER_IDS:
+                printer_info = KNOWN_PRINTER_IDS[printer_key].copy()
+                logger.info(f"Found specific printer: {printer_info['brand']} {printer_info['model']}")
+            else:
+                logger.info(f"Found unknown USB device: VID:0x{vendor_id:04X} PID:0x{product_id:04X}")
+            
+            return device
+        else:
+            logger.warning(f"USB printer not found: VID:0x{vendor_id:04X} PID:0x{product_id:04X}")
+            return None
+    except Exception as e:
+        logger.error(f"Error finding USB printer: {e}")
+        return None
 
 
 def get_connection_type() -> PrinterConnectionType:
@@ -94,8 +187,9 @@ def auto_detect_serial_port() -> Optional[str]:
 
 
 def auto_detect_usb_printer() -> tuple[Optional[int], Optional[int]]:
-    """Auto-detect the first available USB printer"""
+    """Auto-detect the first available USB printer using known IDs"""
     try:
+        # First try the project's list_all_printers function
         available_printers = list_all_printers()
         if available_printers and available_printers.get('usb'):
             printer = available_printers['usb'][0]
@@ -104,8 +198,29 @@ def auto_detect_usb_printer() -> tuple[Optional[int], Optional[int]]:
             if vendor_id and product_id:
                 logger.info(f"Auto-detected USB printer: VID 0x{vendor_id:04X}, PID 0x{product_id:04X}")
                 return vendor_id, product_id
+        
+        # If that fails, try direct USB scanning with known printer IDs
+        if USB_CORE_AVAILABLE:
+            logger.info("Scanning for known USB printers...")
+            usb_printers = find_usb_printers()
+            if usb_printers:
+                # Use the first found printer
+                printer = usb_printers[0]
+                vendor_id = printer['vendor_id']
+                product_id = printer['product_id']
+                logger.info(f"Found {printer['brand']} {printer['model']} - VID:0x{vendor_id:04X} PID:0x{product_id:04X}")
+                return vendor_id, product_id
+        
+        # Try the specific Zebra printer from old_matching.py as fallback
+        zebra_vendor = 0x0A5F
+        zebra_product = 0x0164
+        if find_specific_usb_printer(zebra_vendor, zebra_product):
+            logger.info(f"Found Zebra printer (fallback): VID:0x{zebra_vendor:04X} PID:0x{zebra_product:04X}")
+            return zebra_vendor, zebra_product
+            
     except Exception as e:
         logger.error(f"Error detecting USB printers: {e}")
+    
     return None, None
 
 
@@ -156,10 +271,23 @@ def create_printer_config() -> PrinterConfig:
         try:
             usb_vendor_id = int(vendor_id_str, 16) if vendor_id_str.startswith('0x') else int(vendor_id_str)
             usb_product_id = int(product_id_str, 16) if product_id_str.startswith('0x') else int(product_id_str)
+            logger.info(f"Using USB IDs from environment: VID:0x{usb_vendor_id:04X} PID:0x{usb_product_id:04X}")
+            
+            # Verify the device exists
+            if USB_CORE_AVAILABLE:
+                device = find_specific_usb_printer(usb_vendor_id, usb_product_id)
+                if device is None:
+                    logger.warning("Specified USB printer not found, will try auto-detection")
+                    usb_vendor_id = None
+                    usb_product_id = None
         except ValueError:
-            logger.warning("Invalid USB vendor/product ID format")
-    elif connection_type in [PrinterConnectionType.USB, PrinterConnectionType.AUTO]:
-        usb_vendor_id, usb_product_id = auto_detect_usb_printer()
+            logger.warning("Invalid USB vendor/product ID format in environment variables")
+    
+    # Auto-detect if not specified or not found
+    if not usb_vendor_id or not usb_product_id:
+        if connection_type in [PrinterConnectionType.USB, PrinterConnectionType.AUTO]:
+            logger.info("Auto-detecting USB printer...")
+            usb_vendor_id, usb_product_id = auto_detect_usb_printer()
     
     return PrinterConfig(
         printer_id=printer_id,
@@ -186,40 +314,96 @@ def create_server_config() -> ServerConfig:
 
 
 def list_available_ports():
-    """List all available serial ports for debugging"""
-    logger.info("=== Available Serial Ports Debug ===")
+    """List all available serial ports and USB printers for debugging"""
+    logger.info("=== Available Printers Debug ===")
     
+    # Serial ports
     if not SERIAL_AVAILABLE:
         logger.error("PySerial not installed. Install with: pip install pyserial")
-        return
+    else:
+        try:
+            ports = list(serial.tools.list_ports.comports())
+            if not ports:
+                logger.warning("No serial ports found")
+                if platform.system().lower() == 'windows':
+                    logger.info("Windows troubleshooting tips:")
+                    logger.info("1. Check Device Manager for COM ports")
+                    logger.info("2. Install printer drivers")
+                    logger.info("3. Check if printer is properly connected")
+                    logger.info("4. Try different USB ports")
+            else:
+                logger.info(f"Found {len(ports)} serial port(s):")
+                for i, port in enumerate(ports):
+                    logger.info(f"  {i+1}: {port.device}")
+                    logger.info(f"      Description: {port.description}")
+                    logger.info(f"      Hardware ID: {port.hwid if hasattr(port, 'hwid') else 'N/A'}")
+                    
+                    # Test if port is accessible
+                    try:
+                        test_serial = serial.Serial(port.device, timeout=0.1)
+                        test_serial.close()
+                        logger.info(f"      Status: Available ✓")
+                    except Exception as e:
+                        logger.info(f"      Status: Busy or Error - {e}")
+                    logger.info("")
+        except Exception as e:
+            logger.error(f"Error listing serial ports: {e}")
     
-    try:
-        ports = list(serial.tools.list_ports.comports())
-        if not ports:
-            logger.warning("No serial ports found")
-            if platform.system().lower() == 'windows':
-                logger.info("Windows troubleshooting tips:")
-                logger.info("1. Check Device Manager for COM ports")
-                logger.info("2. Install printer drivers")
-                logger.info("3. Check if printer is properly connected")
-                logger.info("4. Try different USB ports")
-        else:
-            logger.info(f"Found {len(ports)} serial port(s):")
-            for i, port in enumerate(ports):
-                logger.info(f"  {i+1}: {port.device}")
-                logger.info(f"      Description: {port.description}")
-                logger.info(f"      Hardware ID: {port.hwid if hasattr(port, 'hwid') else 'N/A'}")
+    # USB printers
+    logger.info("=== USB Printers ===")
+    if not USB_CORE_AVAILABLE:
+        logger.warning("PyUSB not installed. Install with: pip install pyusb")
+        logger.info("Note: PyUSB is required for direct USB printer communication")
+    else:
+        try:
+            usb_printers = find_usb_printers()
+            if not usb_printers:
+                logger.warning("No known USB printers found")
+                logger.info("Looking for any USB devices that might be printers...")
                 
-                # Test if port is accessible
-                try:
-                    test_serial = serial.Serial(port.device, timeout=0.1)
-                    test_serial.close()
-                    logger.info(f"      Status: Available ✓")
-                except Exception as e:
-                    logger.info(f"      Status: Busy or Error - {e}")
-                logger.info("")
-    except Exception as e:
-        logger.error(f"Error listing ports: {e}")
+                # Look for any USB devices that might be printers
+                devices = usb.core.find(find_all=True)
+                printer_like_devices = []
+                
+                for device in devices:
+                    try:
+                        # Check device class (7 = Printer class)
+                        if hasattr(device, 'bDeviceClass') and device.bDeviceClass == 7:
+                            printer_like_devices.append(device)
+                        # Check interface class
+                        elif hasattr(device, 'configurations'):
+                            for config in device.configurations():
+                                for interface in config:
+                                    if interface.bInterfaceClass == 7:  # Printer class
+                                        printer_like_devices.append(device)
+                                        break
+                    except:
+                        continue
+                
+                if printer_like_devices:
+                    logger.info(f"Found {len(printer_like_devices)} potential printer device(s):")
+                    for device in printer_like_devices:
+                        logger.info(f"  VID:0x{device.idVendor:04X} PID:0x{device.idProduct:04X}")
+                        try:
+                            logger.info(f"    Manufacturer: {usb.util.get_string(device, device.iManufacturer)}")
+                            logger.info(f"    Product: {usb.util.get_string(device, device.iProduct)}")
+                        except:
+                            logger.info(f"    Description: Unknown")
+                else:
+                    logger.info("No USB printer devices found")
+            else:
+                logger.info(f"Found {len(usb_printers)} known USB printer(s):")
+                for printer in usb_printers:
+                    logger.info(f"  {printer['brand']} {printer['model']}")
+                    logger.info(f"    VID:0x{printer['vendor_id']:04X} PID:0x{printer['product_id']:04X}")
+                    logger.info(f"    Type: {printer['type']}")
+                    logger.info("")
+        except Exception as e:
+            logger.error(f"Error listing USB devices: {e}")
+            if platform.system().lower() == 'linux':
+                logger.info("Note: On Linux you may need to run with sudo or add udev rules")
+            elif platform.system().lower() == 'windows':
+                logger.info("Note: Install libusb drivers for USB access")
 
 
 async def main():
@@ -227,8 +411,9 @@ async def main():
     logger.info("Starting WebSocket Printer Client...")
     logger.info(f"Operating System: {platform.system()} {platform.release()}")
     logger.info(f"PySerial Available: {SERIAL_AVAILABLE}")
+    logger.info(f"PyUSB Available: {USB_CORE_AVAILABLE}")
     
-    # List available ports for debugging
+    # List available ports and printers for debugging
     list_available_ports()
     
     try:
