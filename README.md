@@ -1,24 +1,45 @@
 # WebSocket Printer Client
 
-Python client application that connects to the WebSocket server and handles print jobs by sending commands to thermal printers via serial port.
+Python client application that connects to the WebSocket server and handles print jobs by sending commands to thermal printers via serial port or USB direct connection.
 
 ## 🔧 Features
 
 - **WebSocket Communication**: Real-time connection to the Node.js print server
-- **Serial Port Support**: Direct communication with thermal printers
+- **Multiple Connection Types**: Serial port, USB direct, or auto-detection
+- **USB Direct Support**: Bypass COM port issues with direct USB communication
 - **Multiple Label Formats**: Support for location, pallet, and test labels
 - **Multiple Printer Types**: ESC/POS and ZPL command generation
 - **Auto-Reconnection**: Automatic reconnection to server on connection loss
 - **Error Handling**: Comprehensive error handling and logging
 - **Configuration Management**: Environment-based configuration
+- **Diagnostic Tools**: Built-in port diagnostics and recovery tools
 
-## 📦 Installation
+## � Quick Setup
+
+### For Zebra ZD220 (USB Connection - Recommended)
+
+If your printer appears under "libusbk USB Devices" instead of COM ports:
+
+```bash
+python zebra_usb_fix.py
+python run_client.py
+```
+
+This bypasses COM port issues entirely!
+
+### For COM Port Issues
+
+```bash
+python fix_com3.py
+```
+
+## �📦 Installation
 
 ### Prerequisites
 
 - Python 3.7 or higher
-- Serial port access (USB, RS232, etc.)
 - Thermal printer (ESC/POS or ZPL compatible)
+- PyUSB for USB direct connection (recommended)
 
 ### Install Dependencies
 
@@ -28,24 +49,36 @@ pip install -r requirements.txt
 
 ### Environment Setup
 
-1. Copy the environment template:
+1. **Automatic Setup** (Recommended for Zebra ZD220):
+```bash
+python zebra_usb_fix.py
+```
+
+2. **Manual Setup**:
+Copy and edit the environment template:
 ```bash
 cp .env.example .env
 ```
 
-2. Edit `.env` file with your configuration:
+Edit `.env` file with your configuration:
 ```bash
+# Connection Type (usb recommended for Zebra printers)
+CONNECTION_TYPE=usb
+
+# USB Configuration (for Zebra ZD220)
+USB_VENDOR_ID=0x0A5F
+USB_PRODUCT_ID=0x0164
+
 # Printer Configuration
-PRINTER_ID=PRINTER_001
-PRINTER_NAME=Main Printer
+PRINTER_ID=ZEBRA_ZD220
+PRINTER_NAME=Zebra ZD220 USB
 PRINTER_TYPE=thermal
 PRINTER_LOCATION=Warehouse A
 
-# Serial Port Configuration (adjust for your system)
-SERIAL_PORT=/dev/ttyUSB0  # Linux/Mac
-# SERIAL_PORT=COM1         # Windows
-BAUD_RATE=9600
-SERIAL_TIMEOUT=1.0
+# Alternative: Serial Port Configuration
+# SERIAL_PORT=COM3         # Windows
+# SERIAL_PORT=/dev/ttyUSB0 # Linux/Mac
+# BAUD_RATE=9600
 
 # Server Configuration
 SERVER_URL=http://localhost:25625
@@ -61,10 +94,83 @@ python run_client.py
 ```
 
 The script will:
-1. List available serial ports
-2. Ask for printer configuration
-3. Connect to the WebSocket server
-4. Start processing print jobs
+1. Auto-detect available printers (USB and Serial)
+2. Connect to the WebSocket server
+3. Start processing print jobs
+
+## 🔧 Troubleshooting
+
+### Common Issues
+
+#### "Permission denied - Port in use" Error
+
+**Problem**: COM port is being used by another application
+**Solution**:
+```bash
+python fix_com3.py
+```
+
+#### "Cannot configure port" Error
+
+**Problem**: Driver or hardware issues
+**Solutions**:
+1. Try USB direct connection:
+   ```bash
+   python zebra_usb_fix.py
+   ```
+2. Update printer drivers
+3. Try different USB port
+
+#### Printer appears under "libusbk USB Devices"
+
+**Problem**: Printer is using USB interface, not COM port
+**Solution**: Use USB direct connection (recommended)
+```bash
+python zebra_usb_fix.py
+python run_client.py
+```
+
+#### No printer detected
+
+**Problem**: Printer not properly connected or configured
+**Solutions**:
+1. Check connections and power
+2. Run diagnostics:
+   ```bash
+   python port_diagnostics.py --scan
+   ```
+3. Manual configuration in `.env` file
+
+### Diagnostic Tools
+
+- `python fix_com3.py` - Fix COM3 access issues
+- `python zebra_usb_fix.py` - Setup USB direct connection for Zebra printers
+- `python setup_usb_zebra.py` - Advanced USB setup and testing
+- `python port_diagnostics.py` - Comprehensive port analysis
+
+### Windows USB Driver Setup
+
+For USB direct connection on Windows:
+1. Download [Zadig](https://zadig.akeo.ie/)
+2. Run Zadig as Administrator
+3. Options → List All Devices
+4. Select your Zebra printer
+5. Choose WinUSB driver
+6. Click "Install Driver" or "Replace Driver"
+
+## 🖨️ Supported Printers
+
+### Tested Printers
+- Zebra ZD220, ZD410, ZD420
+- Zebra GK420t, GC420t
+- Epson TM-T20, TM-T88
+- Brother QL series
+- Dymo LabelWriter series
+
+### Connection Types
+- **USB Direct**: Recommended for modern printers
+- **Serial/COM**: Traditional connection method
+- **Auto-detect**: Tries USB first, then serial
 
 ### Advanced Usage
 

@@ -348,6 +348,24 @@ def auto_detect_usb_printer() -> tuple[Optional[int], Optional[int]]:
                 logger.info(f"Found {printer['brand']} {printer['model']} - VID:0x{vendor_id:04X} PID:0x{product_id:04X}")
                 return vendor_id, product_id
         
+        # Enhanced Zebra detection for libusb devices
+        if USB_CORE_AVAILABLE:
+            logger.info("Checking for Zebra printers with multiple PID variants...")
+            zebra_vendor = 0x0A5F
+            zebra_pids = [0x0164, 0x0161, 0x0049, 0x0061, 0x008A, 0x0078, 0x0181]  # Common Zebra PIDs
+            
+            for pid in zebra_pids:
+                device = usb.core.find(idVendor=zebra_vendor, idProduct=pid)
+                if device is not None:
+                    try:
+                        manufacturer = usb.util.get_string(device, device.iManufacturer) if device.iManufacturer else "Unknown"
+                        product = usb.util.get_string(device, device.iProduct) if device.iProduct else "Unknown"
+                        logger.info(f"Found Zebra printer: {manufacturer} {product} - VID:0x{zebra_vendor:04X} PID:0x{pid:04X}")
+                        return zebra_vendor, pid
+                    except Exception:
+                        logger.info(f"Found Zebra printer (details unavailable) - VID:0x{zebra_vendor:04X} PID:0x{pid:04X}")
+                        return zebra_vendor, pid
+            
         # Try the specific Zebra printer from old_matching.py as fallback
         zebra_vendor = 0x0A5F
         zebra_product = 0x0164
@@ -657,9 +675,15 @@ async def main():
                 logger.error("1. Install PyUSB: pip install pyusb")
                 logger.error("2. Set USB IDs: USB_VENDOR_ID=0x0A5F USB_PRODUCT_ID=0x0164")
                 logger.error("3. Set connection type: CONNECTION_TYPE=usb")
+                logger.error("4. For Windows: Install WinUSB driver using Zadig")
+                logger.error("   Download Zadig: https://zadig.akeo.ie/")
+                logger.error("   Select your printer and install WinUSB driver")
+                logger.error("5. Quick USB setup: python setup_usb_zebra.py")
                 logger.error("")
                 logger.error("💡 TIP: For Zebra ZD220 printers, try USB direct connection")
                 logger.error("    This bypasses COM port issues entirely!")
+                logger.error("🔧 AUTOMATED USB SETUP:")
+                logger.error("    Run: python setup_usb_zebra.py")
                 return 1
         
         # Create and start the WebSocket client
