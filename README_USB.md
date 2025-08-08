@@ -87,7 +87,7 @@ Proje kök dizininde `.env` dosyası oluşturun ve aşağıdaki ayarları yapın
 
 ```bash
 # Server Configuration - TÜM DOSYALAR BU AYARI KULLANIR
-SERVER_URL=http://localhost:25625
+SERVER_URL=http://192.168.1.139:25625
 
 # Printer Configuration
 PRINTER_ID=USB_PRINTER_001
@@ -184,7 +184,7 @@ config = USBPrinterConfig(
 )
 
 # Client başlat
-client = WebSocketPrinterClient("http://localhost:25625", config)
+client = WebSocketPrinterClient("http://192.168.1.139:25625", config)
 await client.start()
 ```
 

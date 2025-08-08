@@ -436,7 +436,7 @@ class LabelGenerator:
 class WebSocketPrinterClient:
     """WebSocket client for printer communication"""
     
-    def __init__(self, config: PrinterConfig, server_url: str = "http://localhost:25625"):
+    def __init__(self, config: PrinterConfig, server_url: str = "http://192.168.1.139:25625"):
         self.config = config
         self.server_url = server_url
         self.sio = socketio.AsyncClient()
@@ -710,7 +710,7 @@ async def main():
                 except ValueError:
                     print("Invalid input, will auto-detect")
     
-    server_url = input("Server URL (default http://localhost:25625): ").strip() or "http://localhost:25625"
+    server_url = input("Server URL (default http://192.168.1.139:25625): ").strip() or "http://192.168.1.139:25625"
     
     # Determine printer type based on selection
     printer_type = PrinterType.THERMAL

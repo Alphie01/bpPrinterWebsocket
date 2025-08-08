@@ -81,7 +81,7 @@ PRINTER_LOCATION=Warehouse A
 # BAUD_RATE=9600
 
 # Server Configuration
-SERVER_URL=http://localhost:25625
+SERVER_URL=http://192.168.1.139:25625
 ```
 
 ## 🚀 Usage
@@ -342,7 +342,7 @@ import socketio
 async def test_connection():
     sio = socketio.AsyncClient()
     try:
-        await sio.connect('http://localhost:25625')
+        await sio.connect('http://192.168.1.139:25625')
         print('WebSocket connection successful!')
         await sio.disconnect()
     except Exception as e:
@@ -392,7 +392,7 @@ cd /Users/onderalpselcuk/works/bpBack
 npm start
 ```
 
-The server should be accessible at `http://localhost:25625` with WebSocket support.
+The server should be accessible at `http://192.168.1.139:25625` with WebSocket support.
 
 ## 📄 License
 

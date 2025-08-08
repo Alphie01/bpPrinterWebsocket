@@ -664,7 +664,7 @@ if __name__ == "__main__":
         )
         
         # Get server URL from environment variables
-        server_url = os.getenv('SERVER_URL', 'http://localhost:25625')
+        server_url = os.getenv('SERVER_URL', 'http://192.168.1.139:25625')
         print(f"Using server URL: {server_url}")
         
         print(f"Starting client for: {config.printer_name}")

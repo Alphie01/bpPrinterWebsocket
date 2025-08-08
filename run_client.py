@@ -18,7 +18,7 @@ Environment Variables:
     SERIAL_PORT: Serial port for the printer (default: auto-detect)
     BAUD_RATE: Serial communication baud rate (default: 9600)
     SERIAL_TIMEOUT: Serial communication timeout (default: 1.0)
-    SERVER_URL: WebSocket server URL (default: http://localhost:25625)
+    SERVER_URL: WebSocket server URL (default: http://192.168.1.139:25625)
     CONNECTION_TYPE: Connection type (auto, serial, usb) (default: auto)
     USB_VENDOR_ID: USB vendor ID for USB printers (optional)
     USB_PRODUCT_ID: USB product ID for USB printers (optional)
@@ -484,7 +484,7 @@ def create_printer_config() -> PrinterConfig:
 def create_server_config() -> ServerConfig:
     """Create server configuration from environment variables"""
     return ServerConfig(
-        url=os.getenv('SERVER_URL', 'http://localhost:25625'),
+        url=os.getenv('SERVER_URL', 'http://192.168.1.139:25625'),
         reconnect_delay=float(os.getenv('RECONNECT_DELAY', '5.0')),
         max_reconnect_attempts=int(os.getenv('MAX_RECONNECT_ATTEMPTS', '10')),
         ping_interval=float(os.getenv('PING_INTERVAL', '30.0'))

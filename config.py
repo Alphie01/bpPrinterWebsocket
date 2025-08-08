@@ -51,7 +51,7 @@ class PrinterConfig:
 @dataclass
 class ServerConfig:
     """WebSocket server configuration"""
-    url: str = "http://localhost:25625"
+    url: str = "http://192.168.1.139:25625"
     reconnect_delay: float = 5.0
     max_reconnect_attempts: int = 10
     ping_interval: float = 30.0
@@ -61,9 +61,9 @@ class ServerConfig:
         """Create server configuration from environment variables"""
         server_url = os.getenv('SERVER_URL')
         if not server_url:
-            server_url = 'http://localhost:25625'
+            server_url = 'http://192.168.1.139:25625'
             if DOTENV_AVAILABLE:
-                print("WARNING: SERVER_URL not found in .env file, using default: http://localhost:25625")
+                print("WARNING: SERVER_URL not found in .env file, using default: http://192.168.1.139:25625")
         
         return cls(
             url=server_url,

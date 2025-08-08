@@ -14,7 +14,7 @@ Environment Variables:
     PRINTER_NAME: Human-readable name for the printer (default: Auto-detected printer name)
     PRINTER_TYPE: Type of printer (thermal, label, zebra) (default: zebra)
     PRINTER_LOCATION: Physical location of the printer (default: Warehouse A)
-    SERVER_URL: WebSocket server URL (default: http://localhost:25625)
+    SERVER_URL: WebSocket server URL (default: http://192.168.1.139:25625)
     USB_VENDOR_ID: USB vendor ID for USB printers (optional, auto-detect if not specified)
     USB_PRODUCT_ID: USB product ID for USB printers (optional, auto-detect if not specified)
     AUTO_DETECT: Auto-detect printer if vendor/product ID not specified (default: true)
@@ -120,11 +120,11 @@ def get_server_url() -> str:
     # First try environment variable, then fallback to default
     server_url = os.getenv('SERVER_URL')
     if not server_url:
-        server_url = 'http://localhost:25625'
+        server_url = 'http://192.168.1.139:25625'
         if DOTENV_AVAILABLE:
-            print("WARNING: SERVER_URL not found in .env file, using default: http://localhost:25625")
+            print("WARNING: SERVER_URL not found in .env file, using default: http://192.168.1.139:25625")
         else:
-            print("INFO: Using default SERVER_URL: http://localhost:25625")
+            print("INFO: Using default SERVER_URL: http://192.168.1.139:25625")
     return server_url
 
 

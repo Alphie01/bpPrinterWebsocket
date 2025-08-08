@@ -47,7 +47,7 @@ def main():
         'PRINTER_NAME': 'Zebra ZD220 USB',
         'PRINTER_TYPE': 'thermal',
         'PRINTER_LOCATION': 'Warehouse A',
-        'SERVER_URL': 'http://localhost:25625'
+        'SERVER_URL': 'http://192.168.1.139:25625'
     }
     
     # Set environment variables
@@ -69,7 +69,7 @@ PRINTER_NAME=Zebra ZD220 USB
 PRINTER_TYPE=thermal
 PRINTER_LOCATION=Warehouse A
 
-SERVER_URL=http://localhost:25625
+SERVER_URL=http://192.168.1.139:25625
 """
     
     try:

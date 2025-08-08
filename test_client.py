@@ -113,7 +113,7 @@ async def test_websocket_connection():
             print(f"✗ WebSocket connection failed: {data}")
         
         try:
-            await asyncio.wait_for(sio.connect('http://localhost:25625'), timeout=5.0)
+            await asyncio.wait_for(sio.connect('http://192.168.1.139:25625'), timeout=5.0)
             await asyncio.sleep(1)  # Give time for connection event
             await sio.disconnect()
             return connected

@@ -25,7 +25,7 @@ async def test_connection():
     try:
         from printer_client import WebSocketPrinterClient
         
-        server_url = "ws://localhost:25625"
+        server_url = "ws://192.168.1.139:25625"
         print(f"Testing connection to {server_url}")
         print(f"Using test printer config: {test_config.printer_id}")
         

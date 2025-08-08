@@ -23,11 +23,11 @@ def get_server_url():
     """Get server URL from environment variables"""
     server_url = os.getenv('SERVER_URL')
     if not server_url:
-        server_url = 'http://localhost:25625'
+        server_url = 'http://192.168.1.139:25625'
         if DOTENV_AVAILABLE:
-            print("WARNING: SERVER_URL not found in .env file, using default: http://localhost:25625")
+            print("WARNING: SERVER_URL not found in .env file, using default: http://192.168.1.139:25625")
         else:
-            print("INFO: Using default SERVER_URL: http://localhost:25625")
+            print("INFO: Using default SERVER_URL: http://192.168.1.139:25625")
     return server_url
 
 
