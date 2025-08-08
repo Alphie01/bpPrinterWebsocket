@@ -7,6 +7,14 @@ from dataclasses import dataclass
 from typing import Optional
 from enum import Enum
 
+# Load environment variables from .env file
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+    DOTENV_AVAILABLE = True
+except ImportError:
+    DOTENV_AVAILABLE = False
+
 
 class PrinterType(Enum):
     """Supported printer types"""
@@ -51,8 +59,14 @@ class ServerConfig:
     @classmethod
     def from_env(cls) -> 'ServerConfig':
         """Create server configuration from environment variables"""
+        server_url = os.getenv('SERVER_URL')
+        if not server_url:
+            server_url = 'http://localhost:25625'
+            if DOTENV_AVAILABLE:
+                print("WARNING: SERVER_URL not found in .env file, using default: http://localhost:25625")
+        
         return cls(
-            url=os.getenv('SERVER_URL', 'http://localhost:25625'),
+            url=server_url,
             reconnect_delay=float(os.getenv('RECONNECT_DELAY', '5.0')),
             max_reconnect_attempts=int(os.getenv('MAX_RECONNECT_ATTEMPTS', '10')),
             ping_interval=float(os.getenv('PING_INTERVAL', '30.0'))

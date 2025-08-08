@@ -37,6 +37,11 @@ Bu proje, COM port bağımlılıklarını kaldırarak sadece doğrudan USB ileti
 pip install -r requirements.txt
 ```
 
+**Gerekli paketler:**
+- `pyusb` - USB yazıcı iletişimi
+- `python-dotenv` - .env dosyası desteği
+- `python-socketio` - WebSocket iletişimi
+
 **Önemli**: PyUSB için sistem bağımlılıkları:
 
 **macOS:**
@@ -75,6 +80,32 @@ SUBSYSTEM=="usb", ATTR{idVendor}=="04f9", MODE="0666"
 SUBSYSTEM=="usb", ATTR{idVendor}=="04b8", MODE="0666"
 ```
 
+## Yapılandırma
+
+### .env Dosyası
+Proje kök dizininde `.env` dosyası oluşturun ve aşağıdaki ayarları yapın:
+
+```bash
+# Server Configuration - TÜM DOSYALAR BU AYARI KULLANIR
+SERVER_URL=http://localhost:25625
+
+# Printer Configuration
+PRINTER_ID=USB_PRINTER_001
+PRINTER_NAME=Zebra ZD420
+PRINTER_TYPE=zebra
+PRINTER_LOCATION=Warehouse A
+
+# USB Configuration (isteğe bağlı - boş bırakın otomatik tespit için)
+# USB_VENDOR_ID=0x0A5F
+# USB_PRODUCT_ID=0x0164
+AUTO_DETECT=true
+
+# Logging Configuration
+LOG_LEVEL=INFO
+```
+
+**Önemli:** Tüm dosyalar (run_usb_client.py, usb_printer_client.py, main.py, config.py) SERVER_URL'i .env dosyasından alır.
+
 ## Kullanım
 
 ### 1. Mevcut USB Yazıcıları Listele
@@ -89,14 +120,16 @@ python run_usb_client.py
 
 ### 3. Ortam Değişkenleri ile Yapılandırma
 ```bash
+# .env dosyasını düzenleyin
+nano .env
+
+# Veya ortam değişkenlerini doğrudan ayarlayın
+export SERVER_URL="http://192.168.1.100:25625"
 export PRINTER_ID="USB_PRINTER_001"
 export PRINTER_NAME="Zebra ZD420"
 export PRINTER_TYPE="zebra"
-export PRINTER_LOCATION="Warehouse A"
-export SERVER_URL="http://localhost:25625"
 export USB_VENDOR_ID="0x0A5F"
 export USB_PRODUCT_ID="0x0164"
-export AUTO_DETECT="true"
 
 python run_usb_client.py
 ```

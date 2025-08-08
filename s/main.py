@@ -3,11 +3,32 @@ import time
 import sys
 import os
 
+# Load environment variables from .env file
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+    DOTENV_AVAILABLE = True
+except ImportError:
+    DOTENV_AVAILABLE = False
+    print("python-dotenv not available. Install with: pip install python-dotenv")
+
 # Add parent directory to path to import USB printer module
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 # Import our USB printer module
 from usb_direct_printer import send_zpl_to_printer_via_usb
+
+
+def get_server_url():
+    """Get server URL from environment variables"""
+    server_url = os.getenv('SERVER_URL')
+    if not server_url:
+        server_url = 'http://localhost:25625'
+        if DOTENV_AVAILABLE:
+            print("WARNING: SERVER_URL not found in .env file, using default: http://localhost:25625")
+        else:
+            print("INFO: Using default SERVER_URL: http://localhost:25625")
+    return server_url
 
 
 def generate_zpl_label(
@@ -176,6 +197,11 @@ def generate_zpl_label(
 
 file_path = "data_IS.json"  # JSON dosyasının yolu
 count= 0
+
+# Get server URL from .env file (for future WebSocket integration)
+server_url = get_server_url()
+print(f"Server URL from .env: {server_url}")
+
 with open(file_path, 'r', encoding='utf-8') as file:
         data = json.load(file)
     

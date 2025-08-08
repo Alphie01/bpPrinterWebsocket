@@ -31,6 +31,15 @@ import sys
 import platform
 from typing import Optional
 
+# Load environment variables from .env file
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+    DOTENV_AVAILABLE = True
+except ImportError:
+    DOTENV_AVAILABLE = False
+    logging.warning("python-dotenv not available. Environment variables from .env file will not be loaded.")
+
 # Add current directory to path to import local modules
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 

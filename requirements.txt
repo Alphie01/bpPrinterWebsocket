@@ -1,5 +1,8 @@
 # WebSocket Printer Client Dependencies
 
+# Environment configuration
+python-dotenv
+
 # WebSocket client library
 python-socketio[asyncio]==5.11.0
 aiohttp

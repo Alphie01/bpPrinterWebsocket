@@ -26,6 +26,15 @@ import os
 import sys
 from typing import Optional
 
+# Load environment variables from .env file
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+    DOTENV_AVAILABLE = True
+except ImportError:
+    DOTENV_AVAILABLE = False
+    logging.warning("python-dotenv not available. Environment variables from .env file will not be loaded. Install with: pip install python-dotenv")
+
 # Add current directory to path to import local modules
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -108,7 +117,15 @@ def get_config_from_env() -> USBPrinterConfig:
 
 def get_server_url() -> str:
     """Get server URL from environment variables"""
-    return os.getenv('SERVER_URL', 'http://localhost:25625')
+    # First try environment variable, then fallback to default
+    server_url = os.getenv('SERVER_URL')
+    if not server_url:
+        server_url = 'http://localhost:25625'
+        if DOTENV_AVAILABLE:
+            print("WARNING: SERVER_URL not found in .env file, using default: http://localhost:25625")
+        else:
+            print("INFO: Using default SERVER_URL: http://localhost:25625")
+    return server_url
 
 
 def display_printer_info():

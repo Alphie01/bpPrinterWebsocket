@@ -14,9 +14,18 @@ Usage:
 import json
 import time
 import logging
+import os
 from typing import Dict, Any, List
 import sys
-import os
+
+# Load environment variables from .env file
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+    DOTENV_AVAILABLE = True
+except ImportError:
+    DOTENV_AVAILABLE = False
+    logging.warning("python-dotenv not available. Install with: pip install python-dotenv")
 
 # Add current directory to path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
