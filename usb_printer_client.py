@@ -29,7 +29,7 @@ from enum import Enum
 
 # Import our direct USB printer interface
 from usb_direct_printer import DirectUSBPrinter, USBPrinterType, KNOWN_USB_PRINTERS
-from label_generators import LabelGenerator, generate_test_label
+from label_generators import get_label_generator
 
 # Configure logging
 logging.basicConfig(
@@ -276,7 +276,9 @@ class WebSocketPrinterClient:
             
             # Generate label based on type
             if label_type == 'test':
-                zpl_command = generate_test_label()
+                # Create a label generator and generate test label
+                label_generator = get_label_generator("zpl")  # Use ZPL for test labels
+                zpl_command = label_generator.generate_test_label({})
             elif label_type == 'custom_zpl':
                 zpl_command = label_data.get('zpl_command', '')
             elif label_type == 'custom':
