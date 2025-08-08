@@ -202,19 +202,30 @@ async def main():
     
     try:
         print("Starting USB printer client...")
+        print("✅ Connecting to USB printer...")
+        print("✅ Connecting to WebSocket server...")
+        print("📋 Registering printer...")
+        print("🎯 Waiting for print jobs...")
+        print()
         print("Press Ctrl+C to stop")
         print()
         
-        await client.start()
+        # Start client
+        success = await client.start()
+        
+        if not success:
+            print("❌ Failed to start client")
+            sys.exit(1)
         
     except KeyboardInterrupt:
         print("\\nReceived interrupt signal, stopping...")
     except Exception as e:
         logger.error(f"Error running client: {e}")
+        print(f"❌ Client error: {e}")
         sys.exit(1)
     finally:
         await client.stop()
-        print("Client stopped.")
+        print("✅ Client stopped successfully.")
 
 
 if __name__ == "__main__":

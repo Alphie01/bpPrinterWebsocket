@@ -179,6 +179,9 @@ class WebSocketPrinterClient:
         self.printer: Optional[USBPrinterInterface] = None
         self.sio = socketio.AsyncClient()
         self.is_connected = False
+        self.is_registered = False  # Kayıt durumu takibi
+        self.registration_attempts = 0
+        self.max_registration_attempts = 5
         self.reconnect_delay = 5
         self.max_reconnect_attempts = 10
         self.reconnect_attempts = 0
@@ -196,55 +199,137 @@ class WebSocketPrinterClient:
             logger.info("Connected to WebSocket server")
             self.is_connected = True
             self.reconnect_attempts = 0
+            self.is_registered = False  # Reset kayıt durumu
+            self.registration_attempts = 0
             await self._register_printer()
         
         @self.sio.event
         async def disconnect():
             logger.info("Disconnected from WebSocket server")
             self.is_connected = False
+            self.is_registered = False
         
         @self.sio.event
         async def connect_error(data):
             logger.error(f"Connection error: {data}")
             self.is_connected = False
+            self.is_registered = False
+        
+        @self.sio.event
+        async def registration_success(data):
+            """Handle successful printer registration"""
+            logger.info(f"✅ Printer registration successful: {data}")
+            self.is_registered = True
+            self.registration_attempts = 0
+        
+        @self.sio.event
+        async def registration_failed(data):
+            """Handle failed printer registration"""
+            logger.error(f"❌ Printer registration failed: {data}")
+            self.is_registered = False
+            await self._retry_registration()
+        
+        @self.sio.event
+        async def registration_error(data):
+            """Handle printer registration error"""
+            logger.error(f"💥 Printer registration error: {data}")
+            self.is_registered = False
+            await self._retry_registration()
         
         @self.sio.event
         async def print_job(data):
             """Handle incoming print job"""
+            if not self.is_registered:
+                logger.warning("Received print job but printer not registered. Attempting to register...")
+                await self._register_printer()
+                # Wait a bit and check if registered
+                await asyncio.sleep(2)
+                if not self.is_registered:
+                    logger.error("Cannot process print job: printer registration failed")
+                    return
             await self._handle_print_job(data)
         
         @self.sio.event
         async def printer_command(data):
             """Handle direct printer commands"""
+            if not self.is_registered:
+                logger.warning("Received printer command but printer not registered")
+                return
             await self._handle_printer_command(data)
         
         @self.sio.event
         async def health_check(data):
             """Handle health check requests"""
             await self._handle_health_check(data)
+        
+        @self.sio.event
+        async def pong():
+            """Handle pong response"""
+            logger.debug("Pong received from server")
     
     async def _register_printer(self):
         """Register printer with the server"""
         try:
+            if not self.is_connected:
+                logger.warning("Cannot register printer: not connected to server")
+                return
+            
+            if not self.printer or not self.printer.is_connected:
+                logger.warning("Cannot register printer: USB printer not connected")
+                return
+            
+            self.registration_attempts += 1
+            logger.info(f"Registering printer (attempt {self.registration_attempts}/{self.max_registration_attempts})...")
+            
             printer_info = {
-                'printer_id': self.printer_config.printer_id,
-                'printer_name': self.printer_config.printer_name,
-                'printer_type': self.printer_config.printer_type.value,
+                'printerId': self.printer_config.printer_id,  # Server beklediği format
+                'printerName': self.printer_config.printer_name,
+                'printerType': self.printer_config.printer_type.value,
                 'location': self.printer_config.location,
-                'connection_type': 'usb',
-                'capabilities': ['zpl', 'thermal'],
-                'status': 'online' if self.printer and self.printer.is_connected else 'offline'
+                'connectionType': 'usb',
+                'capabilities': ['zpl', 'thermal', 'label'],
+                'status': 'online',
+                'timestamp': time.strftime('%Y-%m-%d %H:%M:%S')
             }
             
             if self.printer and self.printer.is_connected:
                 connection_info = self.printer.get_connection_info()
-                printer_info.update(connection_info)
+                if connection_info and 'usb_info' in connection_info:
+                    printer_info['usbInfo'] = connection_info['usb_info']
             
             await self.sio.emit('register_printer', printer_info)
-            logger.info(f"Printer registered: {self.printer_config.printer_id}")
+            logger.info(f"Registration request sent for printer: {self.printer_config.printer_id}")
+            
+            # Kayıt yanıtını bekleme timeout'u (5 saniye)
+            await asyncio.sleep(5)
+            if not self.is_registered:
+                logger.warning("No registration response received within 5 seconds")
+                await self._retry_registration()
             
         except Exception as e:
             logger.error(f"Error registering printer: {e}")
+            await self._retry_registration()
+    
+    async def _retry_registration(self):
+        """Retry printer registration"""
+        if self.registration_attempts >= self.max_registration_attempts:
+            logger.error(f"Max registration attempts ({self.max_registration_attempts}) reached. Giving up.")
+            return
+        
+        logger.info(f"Retrying registration in {self.reconnect_delay} seconds...")
+        await asyncio.sleep(self.reconnect_delay)
+        
+        if self.is_connected:  # Sadece bağlantı varsa yeniden dene
+            await self._register_printer()
+    
+    async def _send_ping(self):
+        """Send ping to server to test connection"""
+        try:
+            if self.is_connected:
+                await self.sio.emit('ping')
+                logger.debug("Ping sent to server")
+        except Exception as e:
+            logger.error(f"Error sending ping: {e}")
     
     async def _handle_print_job(self, data):
         """Handle incoming print job"""
@@ -577,12 +662,15 @@ class WebSocketPrinterClient:
             
             # Connect to printer
             if not self.printer.connect():
-                logger.error("Failed to connect to printer")
+                logger.error("Failed to connect to USB printer")
                 return False
+            
+            logger.info("✅ USB printer connected successfully")
             
             # Connect to WebSocket server
             while self.reconnect_attempts < self.max_reconnect_attempts:
                 try:
+                    logger.info(f"Attempting to connect to WebSocket server: {self.server_url}")
                     await self.sio.connect(self.server_url)
                     break
                 except Exception as e:
@@ -596,6 +684,29 @@ class WebSocketPrinterClient:
                 logger.error("Max reconnection attempts reached")
                 return False
             
+            logger.info("✅ WebSocket connection established")
+            
+            # Wait for registration to complete
+            max_wait = 30  # 30 saniye bekle
+            wait_time = 0
+            while not self.is_registered and wait_time < max_wait:
+                await asyncio.sleep(1)
+                wait_time += 1
+                if wait_time % 5 == 0:  # Her 5 saniyede bir log
+                    logger.info(f"Waiting for printer registration... ({wait_time}/{max_wait}s)")
+            
+            if self.is_registered:
+                logger.info("🎉 Printer registration completed successfully!")
+                
+                # Send initial ping
+                await self._send_ping()
+                
+                # Start periodic ping (her 30 saniyede bir)
+                asyncio.create_task(self._periodic_ping())
+                
+            else:
+                logger.warning("⚠️ Printer registration not confirmed within timeout")
+            
             # Keep the client running
             await self.sio.wait()
             
@@ -606,6 +717,17 @@ class WebSocketPrinterClient:
             # Cleanup
             if self.printer:
                 self.printer.disconnect()
+    
+    async def _periodic_ping(self):
+        """Send periodic ping to maintain connection"""
+        while self.is_connected:
+            try:
+                await asyncio.sleep(30)  # 30 saniye bekle
+                if self.is_connected:
+                    await self._send_ping()
+            except Exception as e:
+                logger.error(f"Error in periodic ping: {e}")
+                break
     
     async def stop(self):
         """Stop the WebSocket client"""
