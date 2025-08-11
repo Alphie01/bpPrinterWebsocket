@@ -164,9 +164,37 @@ class USBAutoRecoveryPrinter(DirectUSBPrinter):
                         for line in lines:
                             parts = line.split()
                             if len(parts) >= 2:
+                                process_name = parts[0]
+                                pid = parts[1]
+                                
+                                # Kendi PID'imizi kontrol et - kendimizi öldürme!
+                                current_pid = os.getpid()
+                                if int(pid) == current_pid:
+                                    logger.info(f"🛡️ Skipping own process: {process_name} (PID: {pid})")
+                                    continue
+                                
+                                # Python process'lerini kontrol et - aynı script'i çalıştıran başka process'ler
+                                if 'python' in process_name.lower():
+                                    try:
+                                        # Process'in command line'ını kontrol et
+                                        cmdline_result = subprocess.run(
+                                            ['ps', '-p', pid, '-o', 'args='],
+                                            capture_output=True,
+                                            text=True,
+                                            timeout=2
+                                        )
+                                        if cmdline_result.returncode == 0:
+                                            cmdline = cmdline_result.stdout.strip()
+                                            # Eğer aynı script'i çalıştırıyorsa atla
+                                            if any(script in cmdline for script in ['run_usb_client.py', 'usb_printer_client.py', 'test_auto_recovery.py']):
+                                                logger.info(f"🛡️ Skipping Python USB client process: {process_name} (PID: {pid})")
+                                                continue
+                                    except:
+                                        pass  # Cmdline check başarısız olursa devam et
+                                
                                 processes.append({
-                                    'name': parts[0],
-                                    'pid': parts[1],
+                                    'name': process_name,
+                                    'pid': pid,
                                     'device_path': usb_path,
                                     'bus': device.bus,
                                     'address': device.address
@@ -181,18 +209,37 @@ class USBAutoRecoveryPrinter(DirectUSBPrinter):
         return processes
     
     def _kill_usb_processes(self, processes: List[Dict[str, Any]]) -> bool:
-        """Kill processes using USB devices"""
+        """Kill processes using USB devices (excluding our own process)"""
         if not processes:
+            logger.info("✅ No USB processes to terminate")
             return True
         
-        logger.info(f"🔥 Killing {len(processes)} USB processes...")
+        current_pid = os.getpid()
+        filtered_processes = []
+        
+        # Final filtering - double check that we don't kill ourselves
+        for proc in processes:
+            pid = int(proc['pid'])
+            if pid == current_pid:
+                logger.info(f"🛡️ Skipping own process in kill list: {proc['name']} (PID: {pid})")
+                continue
+            filtered_processes.append(proc)
+        
+        if not filtered_processes:
+            logger.info("✅ No external USB processes to terminate")
+            return True
+        
+        logger.info(f"🔥 Killing {len(filtered_processes)} external USB processes...")
         
         success = True
-        for proc in processes:
+        for proc in filtered_processes:
             try:
                 pid = int(proc['pid'])
+                process_name = proc['name']
                 
-                # Önce SIGTERM
+                logger.info(f"🔪 Terminating: {process_name} (PID: {pid})")
+                
+                # Önce SIGTERM gönder
                 os.kill(pid, signal.SIGTERM)
                 time.sleep(0.5)
                 
@@ -200,13 +247,20 @@ class USBAutoRecoveryPrinter(DirectUSBPrinter):
                 try:
                     os.kill(pid, 0)
                     # Hala çalışıyor, SIGKILL gönder
+                    logger.warning(f"   ⚠️ Process still running, sending SIGKILL: {process_name}")
                     os.kill(pid, signal.SIGKILL)
                     time.sleep(0.2)
+                    logger.info(f"   ✅ Process terminated: {process_name}")
                 except ProcessLookupError:
-                    pass  # Process sonlandırıldı
+                    logger.info(f"   ✅ Process terminated gracefully: {process_name}")
                     
-            except (ProcessLookupError, PermissionError, Exception) as e:
-                logger.warning(f"Process kill error: {e}")
+            except ProcessLookupError:
+                logger.info(f"   ✅ Process already terminated: {proc['name']}")
+            except PermissionError:
+                logger.warning(f"   ❌ Permission denied to kill: {proc['name']} (PID: {proc['pid']})")
+                success = False
+            except Exception as e:
+                logger.error(f"   ❌ Error terminating process {proc['name']}: {e}")
                 success = False
         
         return success
@@ -286,35 +340,42 @@ class USBAutoRecoveryPrinter(DirectUSBPrinter):
         logger.info("🔧 Recovering from resource busy error...")
         
         try:
-            # 1. Disconnect
+            # 1. Disconnect current connection
+            logger.info("1️⃣ Disconnecting current USB connection...")
             self.disconnect()
             time.sleep(1)
             
-            # 2. USB process'leri bul ve sonlandır
+            # 2. Find and terminate USB processes (excluding our own)
+            logger.info("2️⃣ Finding conflicting USB processes...")
             processes = self._find_usb_processes()
             if processes:
-                logger.info(f"Found {len(processes)} USB processes")
+                logger.info(f"Found {len(processes)} USB processes to check")
                 if not self._kill_usb_processes(processes):
-                    logger.warning("Some USB processes could not be killed")
+                    logger.warning("Some USB processes could not be terminated")
+            else:
+                logger.info("No conflicting USB processes found")
             
             time.sleep(1)
             
-            # 3. Kernel driver'ı unbind et
+            # 3. Unbind kernel driver
+            logger.info("3️⃣ Unbinding kernel drivers...")
             self._unbind_kernel_driver()
             time.sleep(1)
             
-            # 4. USB reset
+            # 4. Reset USB device
+            logger.info("4️⃣ Resetting USB device...")
             if not self._reset_usb_device(self.vendor_id or 0x0a5f):
-                logger.warning("USB reset failed")
+                logger.warning("USB device reset failed")
             
             time.sleep(self.recovery_delay)
             
-            # 5. Yeniden bağlan
+            # 5. Reconnect
+            logger.info("5️⃣ Reconnecting to USB printer...")
             if self.connect():
                 logger.info("✅ Resource busy recovery successful")
                 return True
             else:
-                logger.error("❌ Resource busy recovery failed")
+                logger.error("❌ Resource busy recovery failed - reconnection failed")
                 return False
         
         except Exception as e:
