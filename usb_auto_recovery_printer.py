@@ -266,18 +266,47 @@ class USBAutoRecoveryPrinter(DirectUSBPrinter):
         return success
     
     def _reset_usb_device(self, vendor_id: int = 0x0a5f) -> bool:
-        """Reset USB device"""
+        """Reset USB device with aggressive recovery"""
         try:
             devices = list(usb.core.find(find_all=True, idVendor=vendor_id))
             
             for device in devices:
                 try:
+                    # USB device reset
                     device.reset()
                     time.sleep(1)
                     logger.info(f"USB device reset: Bus {device.bus:03d} Device {device.address:03d}")
                 except Exception as e:
                     logger.warning(f"USB reset error: {e}")
-                    return False
+            
+            # Aggressive recovery - try USB driver reload (Linux only)
+            try:
+                import platform
+                if platform.system() == "Linux":
+                    logger.info("💪 Attempting aggressive USB driver reload...")
+                    
+                    # Reload USB modules
+                    commands = [
+                        ["sudo", "modprobe", "-r", "usblp"],
+                        ["sudo", "modprobe", "-r", "usbcore"],
+                        ["sudo", "modprobe", "usbcore"],
+                        ["sudo", "modprobe", "usblp"]
+                    ]
+                    
+                    for cmd in commands:
+                        try:
+                            result = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
+                            if result.returncode == 0:
+                                logger.info(f"✅ Command successful: {' '.join(cmd)}")
+                            else:
+                                logger.warning(f"⚠️ Command failed: {' '.join(cmd)} - {result.stderr}")
+                        except (subprocess.TimeoutExpired, FileNotFoundError, PermissionError):
+                            logger.debug(f"Command skipped (no sudo/timeout): {' '.join(cmd)}")
+                    
+                    time.sleep(2)  # Wait for modules to reload
+                
+            except Exception as e:
+                logger.debug(f"Aggressive recovery not available: {e}")
             
             return True
         except Exception as e:
@@ -369,14 +398,26 @@ class USBAutoRecoveryPrinter(DirectUSBPrinter):
             
             time.sleep(self.recovery_delay)
             
-            # 5. Reconnect
+            # 5. Reconnect with retry
             logger.info("5️⃣ Reconnecting to USB printer...")
-            if self.connect():
-                logger.info("✅ Resource busy recovery successful")
-                return True
-            else:
-                logger.error("❌ Resource busy recovery failed - reconnection failed")
-                return False
+            
+            # Try reconnection with multiple attempts
+            for reconnect_attempt in range(3):
+                try:
+                    if self.connect():
+                        logger.info("✅ Resource busy recovery successful")
+                        return True
+                    else:
+                        logger.warning(f"Reconnection attempt {reconnect_attempt + 1}/3 failed")
+                        if reconnect_attempt < 2:
+                            time.sleep(1)  # Wait before retry
+                except Exception as e:
+                    logger.warning(f"Reconnection attempt {reconnect_attempt + 1}/3 error: {e}")
+                    if reconnect_attempt < 2:
+                        time.sleep(1)  # Wait before retry
+            
+            logger.error("❌ Resource busy recovery failed - all reconnection attempts failed")
+            return False
         
         except Exception as e:
             logger.error(f"Resource busy recovery failed: {e}")
@@ -500,14 +541,76 @@ class USBAutoRecoveryPrinter(DirectUSBPrinter):
         return False
     
     def connect(self) -> bool:
-        """Connect with automatic recovery"""
+        """Connect with automatic recovery and configuration error tolerance"""
         try:
-            result = super().connect()
-            if result:
-                self.last_successful_operation = time.time()
-                self.current_error = None
-            return result
+            # Use custom connection logic with error tolerance
+            if self.vendor_id and self.product_id:
+                # Connect to specific printer
+                self.device = usb.core.find(idVendor=self.vendor_id, idProduct=self.product_id)
+                if self.device is None:
+                    logger.error(f"Printer with Vendor ID 0x{self.vendor_id:04X} and Product ID 0x{self.product_id:04X} not found")
+                    return False
+            elif self.auto_detect:
+                # Auto-detect first available printer
+                from usb_direct_printer import KNOWN_USB_PRINTERS
+                for printer_info in KNOWN_USB_PRINTERS:
+                    device = usb.core.find(idVendor=printer_info.vendor_id, idProduct=printer_info.product_id)
+                    if device is not None:
+                        self.device = device
+                        self.vendor_id = printer_info.vendor_id
+                        self.product_id = printer_info.product_id
+                        self.printer_info = printer_info
+                        logger.info(f"Auto-detected printer: {printer_info.manufacturer} {printer_info.model}")
+                        break
+                
+                if self.device is None:
+                    logger.error("No supported USB printers found")
+                    return False
+            else:
+                logger.error("No printer specified and auto-detect disabled")
+                return False
+            
+            # Set the active configuration - with tolerance for busy errors
+            try:
+                self.device.set_configuration()
+                logger.debug("USB configuration set successfully")
+            except usb.core.USBError as e:
+                if "busy" in str(e).lower() or "resource busy" in str(e).lower():
+                    logger.warning(f"Could not set configuration: {e}")
+                    # Continue anyway - printer might still work
+                else:
+                    logger.warning(f"USB configuration error: {e}")
+            
+            # Find the OUT endpoint
+            self.endpoint_out = None
+            for cfg in self.device:
+                for intf in cfg:
+                    for ep in intf:
+                        # Look for bulk OUT endpoint (typically 0x01)
+                        if usb.util.endpoint_direction(ep.bEndpointAddress) == usb.util.ENDPOINT_OUT:
+                            if usb.util.endpoint_type(ep.bmAttributes) == usb.util.ENDPOINT_TYPE_BULK:
+                                self.endpoint_out = ep
+                                break
+                    if self.endpoint_out:
+                        break
+                if self.endpoint_out:
+                    break
+            
+            if self.endpoint_out is None:
+                logger.error("OUT endpoint not found")
+                return False
+            
+            self.is_connected = True
+            logger.info(f"Connected to USB printer (Vendor: 0x{self.vendor_id:04X}, Product: 0x{self.product_id:04X})")
+            logger.info(f"Using endpoint address: 0x{self.endpoint_out.bEndpointAddress:02X}")
+            
+            # Success - reset error state
+            self.last_successful_operation = time.time()
+            self.current_error = None
+            return True
+            
         except Exception as e:
+            logger.error(f"Error connecting to USB printer: {e}")
             self._log_error(e, "connect")
             
             if self.auto_recovery_enabled and self._should_attempt_recovery():
