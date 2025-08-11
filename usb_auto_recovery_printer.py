@@ -115,6 +115,8 @@ class USBAutoRecoveryPrinter(DirectUSBPrinter):
             return USBErrorType.RESOURCE_BUSY
         elif "[errno 13]" in error_str or "access denied" in error_str or "permission denied" in error_str:
             return USBErrorType.ACCESS_DENIED
+        elif "[errno 32]" in error_str or "pipe error" in error_str or "broken pipe" in error_str:
+            return USBErrorType.IO_ERROR  # Treat pipe errors as I/O errors
         elif "no such device" in error_str or "device not found" in error_str:
             return USBErrorType.DEVICE_NOT_FOUND
         elif "timeout" in error_str:
@@ -285,11 +287,9 @@ class USBAutoRecoveryPrinter(DirectUSBPrinter):
                 if platform.system() == "Linux":
                     logger.info("💪 Attempting aggressive USB driver reload...")
                     
-                    # Reload USB modules
+                    # Reload USB modules (skip builtin modules)
                     commands = [
                         ["sudo", "modprobe", "-r", "usblp"],
-                        ["sudo", "modprobe", "-r", "usbcore"],
-                        ["sudo", "modprobe", "usbcore"],
                         ["sudo", "modprobe", "usblp"]
                     ]
                     
@@ -299,7 +299,10 @@ class USBAutoRecoveryPrinter(DirectUSBPrinter):
                             if result.returncode == 0:
                                 logger.info(f"✅ Command successful: {' '.join(cmd)}")
                             else:
-                                logger.warning(f"⚠️ Command failed: {' '.join(cmd)} - {result.stderr}")
+                                if "builtin" in result.stderr.lower():
+                                    logger.debug(f"📝 Module is builtin (skipping): {' '.join(cmd)}")
+                                else:
+                                    logger.warning(f"⚠️ Command failed: {' '.join(cmd)} - {result.stderr}")
                         except (subprocess.TimeoutExpired, FileNotFoundError, PermissionError):
                             logger.debug(f"Command skipped (no sudo/timeout): {' '.join(cmd)}")
                     
@@ -338,27 +341,76 @@ class USBAutoRecoveryPrinter(DirectUSBPrinter):
             return False
     
     def _recover_from_io_error(self) -> bool:
-        """Recover from I/O error (errno 5)"""
-        logger.info("🔧 Recovering from I/O error...")
+        """Recover from I/O error (errno 5) and pipe errors (errno 32)"""
+        logger.info("🔧 Recovering from I/O/Pipe error...")
         
         try:
-            # 1. Disconnect mevcut bağlantı
+            # 1. Disconnect current connection
+            logger.info("1️⃣ Disconnecting current connection...")
             self.disconnect()
             time.sleep(self.recovery_delay)
             
-            # 2. USB cihazını reset et
+            # 2. Aggressive USB reset with longer waits (for physical issues)
+            logger.info("2️⃣ Performing aggressive USB reset...")
             if not self._reset_usb_device(self.vendor_id or 0x0a5f):
                 logger.warning("USB reset failed")
             
-            time.sleep(self.recovery_delay)
+            # 3. Longer wait for printer to stabilize (physical issues take time)
+            logger.info("3️⃣ Waiting for printer stabilization...")
+            time.sleep(self.recovery_delay * 2)  # Double wait for physical issues
             
-            # 3. Yeniden bağlan
-            if self.connect():
-                logger.info("✅ I/O error recovery successful")
-                return True
-            else:
-                logger.error("❌ I/O error recovery failed - reconnection failed")
-                return False
+            # 4. Check if device is still present
+            logger.info("4️⃣ Checking device presence...")
+            try:
+                import usb.core
+                test_device = usb.core.find(idVendor=self.vendor_id or 0x0a5f, idProduct=self.product_id)
+                if test_device is None:
+                    logger.error("Device disappeared after reset")
+                    return False
+                logger.info(f"Device present: Bus {test_device.bus:03d} Device {test_device.address:03d}")
+            except Exception as e:
+                logger.warning(f"Device check failed: {e}")
+            
+            # 5. Multiple reconnection attempts with increasing delays
+            logger.info("5️⃣ Attempting reconnection with retries...")
+            for attempt in range(5):  # More attempts for physical issues
+                try:
+                    delay = (attempt + 1) * 2  # Increasing delay: 2, 4, 6, 8, 10 seconds
+                    if attempt > 0:
+                        logger.info(f"Reconnection attempt {attempt + 1}/5 (waiting {delay}s)...")
+                        time.sleep(delay)
+                    
+                    if self.connect():
+                        logger.info("✅ I/O error recovery successful")
+                        
+                        # Test basic communication
+                        try:
+                            logger.info("🧪 Testing basic communication...")
+                            test_result = self.send_zpl_command("~HS")  # Simple status query
+                            if test_result:
+                                logger.info("✅ Communication test passed")
+                            else:
+                                logger.warning("⚠️ Communication test failed but connection OK")
+                        except:
+                            logger.warning("⚠️ Communication test inconclusive")
+                        
+                        return True
+                    else:
+                        logger.warning(f"Reconnection attempt {attempt + 1} failed")
+                        
+                except Exception as e:
+                    logger.warning(f"Reconnection attempt {attempt + 1} error: {e}")
+            
+            logger.error("❌ I/O error recovery failed - all reconnection attempts failed")
+            
+            # Final diagnostic info
+            logger.info("💡 I/O Error Recovery Tips:")
+            logger.info("   - Check printer power and status LEDs")
+            logger.info("   - Ensure paper is loaded correctly") 
+            logger.info("   - Try different USB cable/port")
+            logger.info("   - Restart printer physically")
+            
+            return False
         
         except Exception as e:
             logger.error(f"I/O error recovery failed: {e}")
