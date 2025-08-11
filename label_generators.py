@@ -257,59 +257,87 @@ class ZPLLabelGenerator(LabelGeneratorBase):
         return "\n".join(zpl)
     
     def generate_pallet_label(self, data: Dict[str, Any]) -> str:
-        """Generate ZPL commands for pallet label"""
-        zpl = []
+        """Generate ZPL commands for pallet label using new design"""
+        import time
+        from datetime import datetime
         
-        # Start label
-        zpl.append("^XA")
+        # Get current date and time for defaults
+        now = datetime.now()
+        current_date = now.strftime('%Y-%m-%d')
+        current_time = now.strftime('%H:%M:%S')
         
-        # Set label size
-        zpl.append("^LH0,0")
-        zpl.append("^PW400")
+        # Extract data with defaults
+        product_code = data.get('product_code', 'PC001')
+        product_name = data.get('product_name', 'Ürün Adı')
+        hammadde = data.get('hammadde', 'Hammadde Bilgisi')
+        palet_id = data.get('palet_id', f'PLT{int(time.time())%10000:04d}')
+        lot_no = data.get('lot_no', f'LOT{int(time.time())%1000:03d}')
+        production_date = data.get('production_date', current_date)
+        expiry_date = data.get('expiry_date', current_date)
+        quantity = data.get('quantity', '100')
+        gross_weight = data.get('gross_weight', '25.0')
+        package_type = data.get('package_type', 'Poşet')
+        net_weight = data.get('net_weight', '24.5')
+        receiving_company = data.get('receiving_company', 'Teslim Alan Firma')
+        department = data.get('department', 'Ana Depo')
+        responsible_person = data.get('responsible_person', 'Sorumlu Kişi')
+        order_no = data.get('order_no', f'SIP{int(time.time())%1000:03d}')
+        order_date = data.get('order_date', current_date)
+        status = data.get('status', 'HAZIR')
+        notes = data.get('notes', 'Notlar')
+        print_date = current_date
+        print_time = current_time
         
-        # Title
-        zpl.append("^FO50,30")
-        zpl.append("^CF0,30")
-        zpl.append("^FDPALLET LABEL^FS")
+        # Read the palet.zpl template
+        try:
+            with open('/Users/onderalpselcuk/works/bpWebsocket/palet.zpl', 'r', encoding='utf-8') as f:
+                zpl_template = f.read()
+        except FileNotFoundError:
+            # Fallback template if file not found
+            zpl_template = """^XA
+^PW799
+^LL630
+^CI28
+^MMT
+^FO5,5^GB790,620,3^FS
+^FO10,10^GB780,80,2^FS
+^FO15,25^A0N,30,25^FDBİL PLASTİK AMBALAJ A.Ş.^FS
+^FO15,50^A0N,20,15^FDPALET ETİKETİ^FS
+^FO10,95^GB780,2,2^FS
+^FO15,105^A0N,25,20^FDÜrün Kodu:^FS
+^FO200,105^A0N,25,20^FD{product_code}^FS
+^FO15,135^A0N,25,20^FDÜrün Adı:^FS
+^FO200,135^A0N,22,18^FD{product_name}^FS
+^FO15,205^A0N,25,20^FDPalet ID:^FS
+^FO150,205^A0N,25,20^FD{palet_id}^FS
+^FO545,345^BQN,2,8^FDLA,{palet_id}-{lot_no}-{product_code}^FS
+^XZ"""
         
-        # Barcode
-        barcode = data.get('barcode', '')
-        if barcode:
-            zpl.append("^FO50,80")
-            zpl.append("^BY2,3,50")
-            zpl.append(f"^BC^FD{barcode}^FS")
+        # Replace placeholders with actual data
+        zpl_command = zpl_template.format(
+            product_code=product_code,
+            product_name=product_name,
+            hammadde=hammadde,
+            palet_id=palet_id,
+            lot_no=lot_no,
+            production_date=production_date,
+            expiry_date=expiry_date,
+            quantity=quantity,
+            gross_weight=gross_weight,
+            package_type=package_type,
+            net_weight=net_weight,
+            receiving_company=receiving_company,
+            department=department,
+            responsible_person=responsible_person,
+            order_no=order_no,
+            order_date=order_date,
+            status=status,
+            notes=notes,
+            print_date=print_date,
+            print_time=print_time
+        )
         
-        # Pallet data
-        y_pos = 160
-        zpl.append(f"^FO50,{y_pos}")
-        zpl.append("^CF0,20")
-        zpl.append(f"^FDPallet ID: {data.get('id', 'N/A')}^FS")
-        
-        y_pos += 25
-        zpl.append(f"^FO50,{y_pos}")
-        zpl.append(f"^FDType: {data.get('palletType', 'N/A')}^FS")
-        
-        y_pos += 25
-        zpl.append(f"^FO50,{y_pos}")
-        zpl.append(f"^FDStatus: {data.get('status', 'N/A')}^FS")
-        
-        # Weight
-        current_weight = data.get('currentWeight', 0)
-        max_weight = data.get('maxWeight', 0)
-        y_pos += 25
-        zpl.append(f"^FO50,{y_pos}")
-        zpl.append(f"^FDWeight: {current_weight}/{max_weight} kg^FS")
-        
-        # Print timestamp
-        y_pos += 40
-        zpl.append(f"^FO50,{y_pos}")
-        zpl.append("^CF0,15")
-        zpl.append(f"^FDPrinted: {data.get('printedAt', time.strftime('%Y-%m-%d %H:%M:%S'))}^FS")
-        
-        # End label
-        zpl.append("^XZ")
-        
-        return "\n".join(zpl)
+        return zpl_command
     
     def generate_test_label(self, data: Dict[str, Any]) -> str:
         """Generate ZPL commands for test label"""

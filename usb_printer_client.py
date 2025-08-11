@@ -385,6 +385,11 @@ class WebSocketPrinterClient:
                 # Direct ZPL command provided
                 zpl_command = label_data.get('zpl_command', '')
                 logger.info("Using direct ZPL command from label_data")
+            elif label_type == 'pallet' or label_type == 'palet':
+                # Pallet label with specific data
+                logger.info("Generating pallet label using provided data")
+                label_generator = get_label_generator("zpl")
+                zpl_command = label_generator.generate_pallet_label(label_data)
             elif label_type == 'test' and len(label_data) <= 1:
                 # Test label with no additional data - use default test label
                 logger.info("Generating default test label (no custom data provided)")
