@@ -90,6 +90,16 @@ class USBAutoRecoveryPrinter(DirectUSBPrinter):
         """Classify USB error type"""
         error_str = str(error).lower()
         
+        # Check for USBError with backend error
+        if hasattr(error, 'backend_error_code'):
+            if error.backend_error_code == 5:
+                return USBErrorType.IO_ERROR
+            elif error.backend_error_code == 16:
+                return USBErrorType.RESOURCE_BUSY
+            elif error.backend_error_code == 13:
+                return USBErrorType.ACCESS_DENIED
+        
+        # Check standard errno attribute
         if hasattr(error, 'errno'):
             if error.errno == 5:
                 return USBErrorType.IO_ERROR
@@ -98,11 +108,12 @@ class USBAutoRecoveryPrinter(DirectUSBPrinter):
             elif error.errno == 13:
                 return USBErrorType.ACCESS_DENIED
         
-        if "input/output error" in error_str or "i/o error" in error_str:
+        # Check error string patterns for common USB errors
+        if "[errno 5]" in error_str or "input/output error" in error_str or "i/o error" in error_str:
             return USBErrorType.IO_ERROR
-        elif "resource busy" in error_str or "busy" in error_str:
+        elif "[errno 16]" in error_str or "resource busy" in error_str or "busy" in error_str:
             return USBErrorType.RESOURCE_BUSY
-        elif "access denied" in error_str or "permission denied" in error_str:
+        elif "[errno 13]" in error_str or "access denied" in error_str or "permission denied" in error_str:
             return USBErrorType.ACCESS_DENIED
         elif "no such device" in error_str or "device not found" in error_str:
             return USBErrorType.DEVICE_NOT_FOUND
@@ -351,20 +362,28 @@ class USBAutoRecoveryPrinter(DirectUSBPrinter):
     def _should_attempt_recovery(self) -> bool:
         """Check if recovery should be attempted"""
         if not self.auto_recovery_enabled:
+            logger.debug("Auto recovery disabled")
             return False
         
         if not self.current_error:
+            logger.debug("No current error to recover from")
             return False
         
         if self.current_error.recovery_attempts >= self.max_recovery_attempts:
-            logger.warning(f"Max recovery attempts ({self.max_recovery_attempts}) reached")
+            logger.warning(f"Max recovery attempts ({self.max_recovery_attempts}) reached for {self.current_error.error_type.value}")
             return False
         
-        # Çok sık recovery denemesini önle
+        # Çok sık recovery denemesini önle - ama ilk deneme için hemen izin ver
+        if self.current_error.recovery_attempts == 0:
+            logger.debug("First recovery attempt - allowing immediately")
+            return True
+        
         time_since_last = time.time() - self.current_error.last_attempt_time
         if time_since_last < self.recovery_delay:
+            logger.debug(f"Recovery delay not met: {time_since_last:.1f}s < {self.recovery_delay}s")
             return False
         
+        logger.debug(f"Recovery attempt {self.current_error.recovery_attempts + 1}/{self.max_recovery_attempts} allowed")
         return True
     
     def send_zpl_command(self, zpl_command: str) -> bool:
@@ -375,16 +394,23 @@ class USBAutoRecoveryPrinter(DirectUSBPrinter):
         
         for attempt in range(max_attempts):
             try:
-                # Temel gönderme işlemi
-                result = super().send_zpl_command(zpl_command)
+                # Temel gönderme işlemi - USB hatasını yakalayıp değerlendirmek için try-catch
+                if not self.is_connected or not self.device or not self.endpoint_out:
+                    raise Exception("Printer not connected")
                 
-                if result:
-                    self.last_successful_operation = time.time()
-                    self.current_error = None
-                    logger.info(f"ZPL command sent successfully (attempt {attempt + 1})")
-                    return True
-                else:
-                    raise Exception("ZPL command send failed")
+                # Send data to the OUT endpoint
+                self.device.write(self.endpoint_out.bEndpointAddress, zpl_command.encode('utf-8'), timeout=1000)
+                logger.info("ZPL command sent successfully")
+                
+                # Add a small delay as in main.py
+                time.sleep(1)
+                
+                # Success - reset error state
+                self.last_successful_operation = time.time()
+                self.current_error = None
+                if attempt > 0:
+                    logger.info(f"ZPL command sent successfully after {attempt + 1} attempts")
+                return True
             
             except Exception as e:
                 self._log_error(e, "send_zpl_command")
@@ -392,7 +418,7 @@ class USBAutoRecoveryPrinter(DirectUSBPrinter):
                 # İlk deneme mi ve auto recovery açık mı?
                 if attempt < max_attempts - 1 and self._should_attempt_recovery():
                     error_type = self._classify_usb_error(e)
-                    logger.warning(f"Attempting recovery for {error_type.value} (attempt {attempt + 1}/{max_attempts})")
+                    logger.warning(f"Attempting recovery for {error_type.value} (attempt {attempt + 1}/{max_attempts}) - Error: {e}")
                     
                     if self.current_error:
                         self.current_error.recovery_attempts += 1
@@ -400,6 +426,7 @@ class USBAutoRecoveryPrinter(DirectUSBPrinter):
                     
                     # Recovery dene
                     if self._recover_from_error(error_type):
+                        logger.info(f"Recovery successful, retrying command...")
                         time.sleep(0.5)  # Kısa bekleme sonrası tekrar dene
                         continue
                     else:
