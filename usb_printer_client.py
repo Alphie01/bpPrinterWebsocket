@@ -44,8 +44,8 @@ from label_generators import get_label_generator
 
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s'
+    level=logging.DEBUG,  # Changed from INFO to DEBUG for more detailed logging
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
 
@@ -339,6 +339,8 @@ class WebSocketPrinterClient:
     async def _handle_print_job(self, data):
         """Handle incoming print job"""
         try:
+            logger.info(f"Received print job data: {data}")
+            
             job = PrintJob(
                 job_id=data.get('job_id', ''),
                 label_data=data.get('label_data', {}),
@@ -346,7 +348,8 @@ class WebSocketPrinterClient:
                 requested_by=data.get('requested_by', None)
             )
             
-            logger.info(f"Received print job: {job.job_id}")
+            logger.info(f"Created print job: {job.job_id}")
+            logger.debug(f"Job label_data: {job.label_data}")
             
             # Process the print job
             success = await self._process_print_job(job)
@@ -372,21 +375,26 @@ class WebSocketPrinterClient:
                 return False
             
             label_data = job.label_data
-            label_type = label_data.get('type', 'test')
+            label_type = label_data.get('type', 'auto')
             
-            # Generate label based on type
-            if label_type == 'test':
-                # Create a label generator and generate test label
-                label_generator = get_label_generator("zpl")  # Use ZPL for test labels
-                zpl_command = label_generator.generate_test_label({})
-            elif label_type == 'custom_zpl':
+            logger.info(f"Processing print job {job.job_id} with type: {label_type}")
+            logger.debug(f"Label data received: {label_data}")
+            
+            # Generate label based on type or auto-detect from data
+            if label_type == 'custom_zpl':
+                # Direct ZPL command provided
                 zpl_command = label_data.get('zpl_command', '')
-            elif label_type == 'custom':
-                # Generate custom label using the data from main.py style
-                zpl_command = self._generate_custom_label(label_data)
+                logger.info("Using direct ZPL command from label_data")
+            elif label_type == 'test' and len(label_data) <= 1:
+                # Test label with no additional data - use default test label
+                logger.info("Generating default test label (no custom data provided)")
+                label_generator = get_label_generator("zpl")
+                zpl_command = label_generator.generate_test_label({})
             else:
-                logger.error(f"Unknown label type: {label_type}")
-                return False
+                # Any other case - use custom label generation with provided data
+                # This includes: test with data, custom, auto, or any unknown type
+                logger.info(f"Generating custom label using provided data for type: {label_type}")
+                zpl_command = self._generate_custom_label(label_data)
             
             if not zpl_command:
                 logger.error("No ZPL command generated")
