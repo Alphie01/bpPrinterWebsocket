@@ -7,25 +7,32 @@ Python client application that connects to the WebSocket server and handles prin
 - **WebSocket Communication**: Real-time connection to the Node.js print server
 - **Multiple Connection Types**: Serial port, USB direct, or auto-detection
 - **USB Direct Support**: Bypass COM port issues with direct USB communication
+- **Automatic Error Recovery**: Built-in recovery for USB I/O errors (errno 5, 16, 13)
 - **Multiple Label Formats**: Support for location, pallet, and test labels
 - **Multiple Printer Types**: ESC/POS and ZPL command generation
 - **Auto-Reconnection**: Automatic reconnection to server on connection loss
-- **Error Handling**: Comprehensive error handling and logging
-- **Configuration Management**: Environment-based configuration
+- **Error Handling**: Comprehensive error handling and logging with auto-recovery
+- **Configuration Management**: Environment-based configuration with .env support
 - **Diagnostic Tools**: Built-in port diagnostics and recovery tools
+- **Production Ready**: Robust error recovery for continuous operation
 
 ## � Quick Setup
 
 ### For Zebra ZD220 (USB Connection - Recommended)
 
+**NEW: Enhanced Auto-Recovery Support**
+
 If your printer appears under "libusbk USB Devices" instead of COM ports:
 
 ```bash
-python zebra_usb_fix.py
-python run_client.py
+# Test with automatic error recovery
+python test_auto_recovery.py
+
+# Run the enhanced USB client
+python run_usb_client.py
 ```
 
-This bypasses COM port issues entirely!
+This bypasses COM port issues entirely and automatically recovers from USB errors!
 
 ### For COM Port Issues
 
@@ -98,7 +105,47 @@ The script will:
 2. Connect to the WebSocket server
 3. Start processing print jobs
 
-## 🔧 Troubleshooting
+## � Automatic Error Recovery
+
+### NEW: Built-in USB Error Recovery
+
+The enhanced printer client now includes automatic error recovery for common USB issues:
+
+#### Supported Error Recovery:
+- **errno 5 (I/O Error)**: Automatic USB reconnection and device reset
+- **errno 16 (Resource Busy)**: Process cleanup and USB resource management  
+- **errno 13 (Access Denied)**: Linux permission handling with udev rules
+- **Device disconnection**: Automatic reconnection attempts
+- **Timeout errors**: Retry mechanisms with exponential backoff
+
+#### How it Works:
+1. **Error Detection**: Automatically classifies USB errors by type
+2. **Recovery Strategy**: Applies appropriate recovery method for each error type
+3. **Retry Logic**: Configurable retry attempts with delays
+4. **Statistics Tracking**: Monitors error patterns and recovery success
+
+#### Configuration:
+```python
+printer = USBAutoRecoveryPrinter(
+    auto_detect=True,
+    max_recovery_attempts=3,     # Max retry attempts per error
+    recovery_delay=2.0,          # Delay between retries (seconds)  
+    auto_recovery_enabled=True   # Enable/disable auto-recovery
+)
+```
+
+#### Testing Auto-Recovery:
+```bash
+# Run comprehensive tests
+python test_auto_recovery.py
+
+# Test specific functionality
+python test_auto_recovery.py basic      # Basic functionality
+python test_auto_recovery.py multiple   # Multiple print test
+python test_auto_recovery.py convenience # Convenience function test
+```
+
+## �🔧 Troubleshooting
 
 ### Common Issues
 

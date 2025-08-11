@@ -48,6 +48,7 @@ except ImportError:
     sys.exit(1)
 
 from usb_printer_client import WebSocketPrinterClient, USBPrinterConfig, PrinterType, list_available_usb_printers
+from usb_auto_recovery_printer import USBAutoRecoveryPrinter
 
 # Configure logging
 logging.basicConfig(

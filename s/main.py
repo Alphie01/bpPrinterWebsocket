@@ -15,8 +15,8 @@ except ImportError:
 # Add parent directory to path to import USB printer module
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-# Import our USB printer module
-from usb_direct_printer import send_zpl_to_printer_via_usb
+# Import our enhanced USB printer module with auto-recovery
+from usb_auto_recovery_printer import send_zpl_with_auto_recovery
 
 
 def get_server_url():
@@ -228,4 +228,4 @@ for obj in data:
     )
     print(zpl_label)
     print(count)
-    send_zpl_to_printer_via_usb(zpl_label)
+    send_zpl_with_auto_recovery(zpl_label)

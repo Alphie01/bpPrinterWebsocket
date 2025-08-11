@@ -37,7 +37,8 @@ except ImportError:
     DOTENV_AVAILABLE = False
     logging.warning("python-dotenv not available. Install with: pip install python-dotenv")
 
-# Import our direct USB printer interface
+# Import our enhanced USB printer interface with auto-recovery
+from usb_auto_recovery_printer import USBAutoRecoveryPrinter, USBErrorType
 from usb_direct_printer import DirectUSBPrinter, USBPrinterType, KNOWN_USB_PRINTERS
 from label_generators import get_label_generator
 
@@ -96,10 +97,14 @@ class USBPrinterInterface:
     def connect(self) -> bool:
         """Connect to USB printer"""
         try:
-            self.usb_printer = DirectUSBPrinter(
+            # Use the enhanced auto-recovery printer
+            self.usb_printer = USBAutoRecoveryPrinter(
                 vendor_id=self.config.usb_vendor_id,
                 product_id=self.config.usb_product_id,
-                auto_detect=self.config.auto_detect
+                auto_detect=self.config.auto_detect,
+                max_recovery_attempts=3,
+                recovery_delay=2.0,
+                auto_recovery_enabled=True
             )
             
             if self.usb_printer.connect():
@@ -387,9 +392,15 @@ class WebSocketPrinterClient:
                 logger.error("No ZPL command generated")
                 return False
             
-            # Send to printer
+            # Send to printer with auto-recovery
             logger.info(f"Sending ZPL command to printer (length: {len(zpl_command)} chars)")
             success = self.printer.send_command(zpl_command)
+            
+            # Log error statistics if auto-recovery printer is used
+            if hasattr(self.printer.usb_printer, 'get_error_stats'):
+                error_stats = self.printer.usb_printer.get_error_stats()
+                if error_stats['total_errors'] > 0:
+                    logger.info(f"Print job completed with {error_stats['total_errors']} errors and {error_stats['total_recovery_attempts']} recovery attempts")
             
             if success:
                 logger.info(f"Print job {job.job_id} completed successfully")
