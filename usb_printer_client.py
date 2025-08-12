@@ -379,7 +379,8 @@ class WebSocketPrinterClient:
             
             logger.info(f"Processing print job {job.job_id} with type: {label_type}")
             logger.debug(f"Label data received: {label_data}")
-            
+            print('label_type:')
+            print(label_type)
             # Generate label based on type or auto-detect from data
             if label_type == 'custom_zpl':
                 # Direct ZPL command provided
