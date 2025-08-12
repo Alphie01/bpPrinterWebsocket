@@ -374,7 +374,7 @@ class WebSocketPrinterClient:
                 logger.error("Printer not connected")
                 return False
             
-            label_data = job.label_data
+            label_data = job.labelData
             label_type = label_data.get('type', 'auto')
             
             logger.info(f"Processing print job {job.job_id} with type: {label_type}")
