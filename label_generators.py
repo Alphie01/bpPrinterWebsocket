@@ -257,40 +257,30 @@ class ZPLLabelGenerator(LabelGeneratorBase):
         return "\n".join(zpl)
     
     def generate_pallet_label(self, data: Dict[str, Any]) -> str:
-        """Generate ZPL commands for pallet label using new design"""
+        """Generate ZPL commands for pallet label using the palet.zpl template"""
         import time
         from datetime import datetime
         
-        # Get current date and time for defaults
-        now = datetime.now()
-        current_date = now.strftime('%Y-%m-%d')
-        current_time = now.strftime('%H:%M:%S')
+        # Get current date for defaults
+        current_date = datetime.now().strftime('%Y-%m-%d')
         
-        # Extract data with defaults
-        product_code = data.get('product_code', 'PC001')
-        product_name = data.get('product_name', 'Ürün Adı')
-        hammadde = data.get('hammadde', 'Hammadde Bilgisi')
+        # Extract data with defaults matching the template placeholders
+        firma_adi = data.get('firma_adi', data.get('firma', 'Bil Plastik Ambalaj'))
+        depo_adi = data.get('depo_adi', data.get('depo', 'Ana Fabrika'))
+        sevkiyat_bilgisi = data.get('sevkiyat_bilgisi', data.get('sevkiyat', 'Sevkiyat Ürün Deposu'))
+        hammadde_ismi = data.get('hammadde_ismi', data.get('hammadde', 'Hammadde İsmi'))
+        urun_adi = data.get('urun_adi', data.get('product_name', 'Ürün Adı'))
+        teslim_firma = data.get('teslim_firma', data.get('receiving_company', 'Teslim Alınan Firma'))
+        siparis_tarihi = data.get('siparis_tarihi', data.get('order_date', current_date))
         palet_id = data.get('palet_id', f'PLT{int(time.time())%10000:04d}')
         lot_no = data.get('lot_no', f'LOT{int(time.time())%1000:03d}')
-        production_date = data.get('production_date', current_date)
-        expiry_date = data.get('expiry_date', current_date)
-        quantity = data.get('quantity', '100')
-        gross_weight = data.get('gross_weight', '25.0')
-        package_type = data.get('package_type', 'Poşet')
-        net_weight = data.get('net_weight', '24.5')
-        receiving_company = data.get('receiving_company', 'Teslim Alan Firma')
-        department = data.get('department', 'Ana Depo')
-        responsible_person = data.get('responsible_person', 'Sorumlu Kişi')
-        order_no = data.get('order_no', f'SIP{int(time.time())%1000:03d}')
-        order_date = data.get('order_date', current_date)
-        status = data.get('status', 'HAZIR')
-        notes = data.get('notes', 'Notlar')
-        print_date = current_date
-        print_time = current_time
+        durum = data.get('durum', data.get('status', 'HAZIR'))
+        brut_kg = data.get('brut_kg', data.get('gross_weight', '25.0'))
+        net_kg = data.get('net_kg', data.get('net_weight', '24.5'))
         
         # Read the palet.zpl template
         try:
-            with open('/Users/onderalpselcuk/works/bpWebsocket/palet.zpl', 'r', encoding='utf-8') as f:
+            with open('./palet.zpl', 'r', encoding='utf-8') as f:
                 zpl_template = f.read()
         except FileNotFoundError:
             # Fallback template if file not found
@@ -299,42 +289,44 @@ class ZPLLabelGenerator(LabelGeneratorBase):
 ^LL630
 ^CI28
 ^MMT
-^FO5,5^GB790,620,3^FS
-^FO10,10^GB780,80,2^FS
-^FO15,25^A0N,30,25^FDBİL PLASTİK AMBALAJ A.Ş.^FS
-^FO15,50^A0N,20,15^FDPALET ETİKETİ^FS
-^FO10,95^GB780,2,2^FS
-^FO15,105^A0N,25,20^FDÜrün Kodu:^FS
-^FO200,105^A0N,25,20^FD{product_code}^FS
-^FO15,135^A0N,25,20^FDÜrün Adı:^FS
-^FO200,135^A0N,22,18^FD{product_name}^FS
-^FO15,205^A0N,25,20^FDPalet ID:^FS
-^FO150,205^A0N,25,20^FD{palet_id}^FS
-^FO545,345^BQN,2,8^FDLA,{palet_id}-{lot_no}-{product_code}^FS
+^FO10,10^GB750,2,2^FS
+^FO10,10^GB2,600,2,B^FS
+^FO759,10^GB2,600,2,B^FS
+^FO10,618^GB750,2,2^FS
+^FO18,25^A0N,25,25^FDFirma Adı / Depo^FS
+^FO25,55^A0N,50,50^FD{firma_adi} / {depo_adi}^FS
+^FO10,110^GB750,2,2^FS
+^FO18,120^A0N,35,35^FD{sevkiyat_bilgisi}^FS
+^FO10,160^GB750,2,2^FS
+^FO18,170^A0N,42,42^FD{hammadde_ismi}^FS
+^FO18,220^A0N,42,42^FD{urun_adi}^FS
+^FO10,270^GB750,2,2^FS
+^FO10,275^GB750,2,2^FS
+^CF0,40
+^FO20,300^FDTeslim Alınan Firma - Bölüm: {teslim_firma}^FS
+^FO20,350^FDSipariş Tarihi: {siparis_tarihi}^FS
+^FO20,400^FDPalet ID: {palet_id}^FS
+^FO20,450^FDDurum: {durum}^FS
+^FO20,500^FDBrüt KG.: {brut_kg}^FS
+^FO20,550^FDNet KG.: {net_kg}^FS
+^FO620,470^BQN,2,6^FDLA,{palet_id}-{lot_no}^FS
+^FO600,460^GB160,160,2^FS
 ^XZ"""
         
         # Replace placeholders with actual data
         zpl_command = zpl_template.format(
-            product_code=product_code,
-            product_name=product_name,
-            hammadde=hammadde,
+            firma_adi=firma_adi,
+            depo_adi=depo_adi,
+            sevkiyat_bilgisi=sevkiyat_bilgisi,
+            hammadde_ismi=hammadde_ismi,
+            urun_adi=urun_adi,
+            teslim_firma=teslim_firma,
+            siparis_tarihi=siparis_tarihi,
             palet_id=palet_id,
             lot_no=lot_no,
-            production_date=production_date,
-            expiry_date=expiry_date,
-            quantity=quantity,
-            gross_weight=gross_weight,
-            package_type=package_type,
-            net_weight=net_weight,
-            receiving_company=receiving_company,
-            department=department,
-            responsible_person=responsible_person,
-            order_no=order_no,
-            order_date=order_date,
-            status=status,
-            notes=notes,
-            print_date=print_date,
-            print_time=print_time
+            durum=durum,
+            brut_kg=brut_kg,
+            net_kg=net_kg
         )
         
         return zpl_command
