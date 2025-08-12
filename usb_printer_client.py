@@ -373,15 +373,17 @@ class WebSocketPrinterClient:
             if not self.printer or not self.printer.is_connected:
                 logger.error("Printer not connected")
                 return False
-            print(job)
+            
+            print(f"Job object: {job}")
             label_data = job.label_data
-            print(label_data.type)
+            print(f"Label data: {label_data}")
+            print(f"Label data type: {type(label_data)}")
+            
             label_type = label_data.get('type', 'auto')
             
             logger.info(f"Processing print job {job.job_id} with type: {label_type}")
             logger.debug(f"Label data received: {label_data}")
-            print('label_type:')
-            print(label_type)
+            print(f'Detected label_type: {label_type}')
             # Generate label based on type or auto-detect from data
             if label_type == 'custom_zpl':
                 # Direct ZPL command provided
