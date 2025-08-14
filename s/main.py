@@ -3,6 +3,7 @@ import time
 import sys
 import os
 
+
 # Load environment variables from .env file
 try:
     from dotenv import load_dotenv
@@ -175,26 +176,30 @@ with open(file_path, 'r', encoding='utf-8') as file:
     
 for obj in data:
     count+=1
-    zpl_label = generate_zpl_label(
-        "T. İŞ BANKASI A.Ş DESTEL",
-        obj['tarih'],
-        obj['width'],
-        obj['etiket'],
-        obj['name'],
-        obj['name2'],
-        obj['sicil'],
-        obj.get("total_amount", "100"),
-        obj['etiket'],
-        "",
-        "S",
-        "",
-        "NAYLON PARA POSETI BÜYÜK",
-        "250",
-        brut_kg_checked=False,
-        uretim_miktari_checked=False,
-        adet_girisi_checked=True,
-        firma_bilgileri_checked=True
-    )
-    print(zpl_label)
-    print(count)
-    send_zpl_with_auto_recovery(zpl_label)
+    x = 0
+    for x in range(40):
+        zpl_label = generate_zpl_label(
+            "T. İŞ BANKASI A.Ş DESTEL",
+            obj['tarih'],
+            obj['width'],
+            obj['etiket'],
+            obj['name'],
+            obj['name2'],
+            obj['sicil'],
+            obj.get("total_amount", "100"),
+            obj['etiket'],
+            "",
+            "S",
+            "",
+            "NAYLON PARA POSETI BÜYÜK",
+            "250",
+            brut_kg_checked=False,
+            uretim_miktari_checked=False,
+            adet_girisi_checked=True,
+            firma_bilgileri_checked=True
+        )
+        print(zpl_label)
+        print(count)
+        send_zpl_with_auto_recovery(zpl_label)
+    time.sleep(10)
+    

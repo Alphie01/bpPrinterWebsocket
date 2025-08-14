@@ -172,12 +172,14 @@ def display_printer_info():
 async def main():
     """Main function"""
     print("USB-Only WebSocket Printer Client")
-    print("Version: 2.1.0 (Enhanced with Pallet Summary Generation)")
+    print("Version: 2.2.0 (Windows PDF Edition)")
     print()
     
-    print("🆕 NEW FEATURE: Automatic Pallet Summary Generation")
-    print("   📋 A5 format summaries for pallet labels")
-    print("   🖨️  Automatic printing to default system printer") 
+    print("🆕 NEW FEATURE: Windows PDF Summary Generation")
+    print("   📋 A5 format PDF summaries for pallet labels")
+    print("   🖨️  Automatic printing to Windows default printer")
+    print("   💻 PowerShell-based printing integration") 
+    print("   📄 Professional PDF formatting with Turkish support") 
     print("   💾 HTML and text formats saved locally")
     print("   🇹🇷 Full Turkish language support")
     print()

@@ -719,108 +719,113 @@ class WebSocketPrinterClient:
             logger.error(f"Error handling health check: {e}")
     
     async def _generate_and_save_pallet_summary(self, pallet_data: Dict[str, Any], job_id: str):
-        """Generate pallet summary in A5 format and save to file"""
+        """Generate pallet summary in A5 PDF format and print to Windows printer"""
         try:
-            logger.info(f"Generating pallet summary for job {job_id}")
+            logger.info(f"Generating pallet PDF summary for job {job_id}")
             
-            # Create summary generator
-            summary_generator = get_pallet_summary_generator()
+            # Create PDF generator
+            try:
+                from pdf_pallet_generator import get_pdf_pallet_generator
+                pdf_generator = get_pdf_pallet_generator()
+            except ImportError:
+                logger.error("PDF generator module not available")
+                return
             
-            # Generate HTML summary (A5 format)
-            html_summary = summary_generator.generate_html_summary(pallet_data)
+            # Generate PDF summary (A5 format)
+            pdf_filename = pdf_generator.generate_pdf_summary(pallet_data)
             
-            # Generate text summary (for basic printers)
-            text_summary = summary_generator.generate_text_summary(pallet_data)
+            logger.info(f"✅ Pallet PDF summary generated: {pdf_filename}")
             
-            # Create output directory if it doesn't exist
-            import os
-            output_dir = "pallet_summaries"
-            if not os.path.exists(output_dir):
-                os.makedirs(output_dir)
-            
-            # Get pallet ID for filename
-            pallet_id = pallet_data.get('palet_id', pallet_data.get('pallet_id', job_id))
-            timestamp = time.strftime('%Y%m%d_%H%M%S')
-            
-            # Save HTML version
-            html_filename = f"{output_dir}/pallet_summary_{pallet_id}_{timestamp}.html"
-            with open(html_filename, 'w', encoding='utf-8') as f:
-                f.write(html_summary)
-            
-            # Save text version
-            txt_filename = f"{output_dir}/pallet_summary_{pallet_id}_{timestamp}.txt"
-            with open(txt_filename, 'w', encoding='utf-8') as f:
-                f.write(text_summary)
-            
-            logger.info(f"✅ Pallet summary saved:")
-            logger.info(f"   HTML: {html_filename}")
-            logger.info(f"   Text: {txt_filename}")
-            
-            # Try to print summary to default printer
-            await self._print_summary_to_default_printer(html_filename)
+            # Try to print PDF to default printer
+            await self._print_pdf_to_default_printer(pdf_filename)
             
         except Exception as e:
-            logger.error(f"Error generating pallet summary: {e}")
+            logger.error(f"Error generating pallet PDF summary: {e}")
     
-    async def _print_summary_to_default_printer(self, html_file_path: str):
-        """Print the HTML summary to the default system printer"""
+    async def _print_pdf_to_default_printer(self, pdf_file_path: str):
+        """Print the PDF summary to the default system printer (Windows optimized)"""
         try:
             import subprocess
             import platform
             
             system = platform.system()
-            logger.info(f"Attempting to print summary on {system}")
+            logger.info(f"Attempting to print PDF summary on {system}")
             
-            if system == "Darwin":  # macOS
-                # Try to print text version first (better compatibility)
-                txt_file = html_file_path.replace('.html', '.txt')
-                if os.path.exists(txt_file):
-                    cmd = ["lpr", txt_file]
-                    result = subprocess.run(cmd, capture_output=True, text=True)
+            if system == "Windows":
+                # Windows - Use multiple methods for reliable printing
+                try:
+                    # Method 1: PowerShell with WMI printer detection
+                    powershell_cmd = f'''
+                    $defaultPrinter = Get-WmiObject -Query "SELECT * FROM Win32_Printer WHERE Default=$true"
+                    if ($defaultPrinter) {{
+                        Write-Host "Default printer found: $($defaultPrinter.Name)"
+                        try {{
+                            Start-Process -FilePath "{pdf_file_path}" -Verb Print -WindowStyle Hidden -Wait
+                            Write-Host "PDF sent to printer successfully"
+                        }} catch {{
+                            Write-Host "Print command failed: $_"
+                            exit 1
+                        }}
+                    }} else {{
+                        Write-Host "No default printer found"
+                        exit 2
+                    }}
+                    '''
+                    
+                    cmd = ["powershell", "-ExecutionPolicy", "Bypass", "-Command", powershell_cmd]
+                    result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
                     
                     if result.returncode == 0:
-                        logger.info("✅ Summary (text) sent to default printer successfully")
+                        logger.info("✅ PDF summary sent to default printer successfully (PowerShell)")
+                    elif result.returncode == 2:
+                        logger.warning("No default printer found")
+                        # Method 2: Use Windows print dialog
+                        subprocess.run(["start", "/wait", pdf_file_path], shell=True)
+                        logger.info("📄 PDF opened with print dialog")
                     else:
-                        logger.warning(f"Text printing failed: {result.stderr}")
-                        # Fallback: Open Safari for manual printing
-                        cmd = ["open", "-a", "Safari", html_file_path]
-                        subprocess.run(cmd)
-                        logger.info("📄 Summary opened in Safari for manual printing")
-                else:
-                    # No text file, open Safari for manual printing
-                    cmd = ["open", "-a", "Safari", html_file_path]
-                    subprocess.run(cmd)
-                    logger.info("📄 Summary opened in Safari for manual printing")
+                        raise Exception(f"PowerShell print failed: {result.stderr}")
+                        
+                except subprocess.TimeoutExpired:
+                    logger.warning("PowerShell print command timeout")
+                    # Fallback: Open with default PDF viewer
+                    subprocess.run(["start", pdf_file_path], shell=True)
+                    logger.info("📄 PDF opened with default viewer (timeout fallback)")
+                except Exception as e:
+                    logger.warning(f"PowerShell print failed: {e}")
+                    # Fallback: Open with default PDF viewer for manual printing
+                    subprocess.run(["start", pdf_file_path], shell=True)
+                    logger.info("📄 PDF opened with default viewer for manual printing")
                     
-            elif system == "Windows":
-                # Use Windows print command
-                cmd = ["print", "/D:default", html_file_path]
-                result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
-                
-                if result.returncode == 0:
-                    logger.info("✅ Summary sent to default printer successfully")
-                else:
-                    # Try alternative method - open with default browser
-                    import webbrowser
-                    webbrowser.open(html_file_path)
-                    logger.info("📄 Summary opened in browser for manual printing")
-                    
-            elif system == "Linux":
-                # Use Linux print command
-                cmd = ["lp", "-d", "default", "-o", "media=A5", html_file_path]
+            elif system == "Darwin":  # macOS (for testing)
+                # macOS - Use lpr with PDF
+                cmd = ["lpr", pdf_file_path]
                 result = subprocess.run(cmd, capture_output=True, text=True)
                 
                 if result.returncode == 0:
-                    logger.info("✅ Summary sent to default printer successfully")
+                    logger.info("✅ PDF summary sent to default printer successfully")
                 else:
-                    # Try alternative method - open with default browser
-                    import webbrowser
-                    webbrowser.open(html_file_path)
-                    logger.info("📄 Summary opened in browser for manual printing")
+                    logger.warning(f"lpr failed: {result.stderr}")
+                    # Fallback: Open with default PDF viewer
+                    cmd = ["open", pdf_file_path]
+                    subprocess.run(cmd)
+                    logger.info("📄 PDF opened with default viewer for manual printing")
+                    
+            elif system == "Linux":
+                # Linux - Use lp command for PDF printing
+                cmd = ["lp", "-d", "default", "-o", "media=A5", pdf_file_path]
+                result = subprocess.run(cmd, capture_output=True, text=True)
+                
+                if result.returncode == 0:
+                    logger.info("✅ PDF summary sent to default printer successfully (Linux)")
+                else:
+                    logger.warning(f"lp command failed: {result.stderr}")
+                    # Fallback: Open with default PDF viewer
+                    subprocess.run(["xdg-open", pdf_file_path])
+                    logger.info("📄 PDF opened with default viewer for manual printing")
             
         except Exception as e:
-            logger.warning(f"Could not print summary automatically: {e}")
-            logger.info(f"📄 Summary file available at: {html_file_path}")
+            logger.warning(f"Could not print PDF summary automatically: {e}")
+            logger.info(f"📄 PDF file available at: {pdf_file_path}")
     
     async def start(self):
         """Start the WebSocket client"""

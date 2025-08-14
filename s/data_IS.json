@@ -1,12 +1,129 @@
 [
   {
-    "tarih": "",
+    "tarih": "Red",
     "sicil": "",
-    "width": "Standart Size",
+    "width": "Mini Size",
     "istenen": 10.0,
     "etiket": "",
-    "name" : "PLAIN COLOUR DIE-CUT",
-    "name2": "(PATCH HANDLE) REINFORCED BAG"
+    "name": "Plain Vest Carrier Bag",
+    "name2": ""
+  },
+  {
+    "tarih": "Red",
+    "sicil": "",
+    "width": "Small Size",
+    "istenen": 10.0,
+    "etiket": "",
+    "name": "Plain Vest Carrier Bag",
+    "name2": ""
+  },
+  {
+    "tarih": "Yellow",
+    "sicil": "",
+    "width": "Medium Size",
+    "istenen": 10.0,
+    "etiket": "",
+    "name": "Plain Vest Carrier Bag",
+    "name2": ""
+  },
+  {
+    "tarih": "Blue",
+    "sicil": "",
+    "width": "Large Size",
+    "istenen": 10.0,
+    "etiket": "",
+    "name": "Plain Vest Carrier Bag",
+    "name2": ""
+  },
+  {
+    "tarih": "Transparent",
+    "sicil": "",
+    "width": "Mini Size",
+    "istenen": 10.0,
+    "etiket": "",
+    "name": "Plain Vest Carrier Bag",
+    "name2": ""
+  },
+  {
+    "tarih": "Transparent",
+    "sicil": "",
+    "width": "Small Size",
+    "istenen": 10.0,
+    "etiket": "",
+    "name": "Plain Vest Carrier Bag",
+    "name2": ""
+  },
+  {
+    "tarih": "Transparent",
+    "sicil": "",
+    "width": "Medium Size",
+    "istenen": 10.0,
+    "etiket": "",
+    "name": "Plain Vest Carrier Bag",
+    "name2": ""
+  },
+  {
+    "tarih": "Black",
+    "sicil": "110",
+    "width": "80",
+    "istenen": 10.0,
+    "etiket": "",
+    "name": "Garbage Bag",
+    "name2": ""
+  },
+  {
+    "tarih": "Black",
+    "sicil": "",
+    "width": "Medium",
+    "istenen": 10.0,
+    "etiket": "",
+    "name": "Garbage Bag",
+    "name2": ""
+  },
+  {
+    "tarih": "Black",
+    "sicil": "",
+    "width": "Mini",
+    "istenen": 10.0,
+    "etiket": "",
+    "name": "Garbage Bag",
+    "name2": ""
+  },
+  {
+    "tarih": "Black",
+    "sicil": "",
+    "width": "Xl",
+    "istenen": 10.0,
+    "etiket": "",
+    "name": "Garbage Bag",
+    "name2": ""
+  },
+  {
+    "tarih": "Transparent",
+    "sicil": "",
+    "width": "Medium Size",
+    "istenen": 10.0,
+    "etiket": "",
+    "name": "Freezer Bag",
+    "name2": ""
+  },
+  {
+    "tarih": "Transparent",
+    "sicil": "",
+    "width": "Large Size",
+    "istenen": 10.0,
+    "etiket": "",
+    "name": "Freezer Bag",
+    "name2": ""
+  },
+  {
+    "tarih": "Transparent",
+    "sicil": "10 M",
+    "width": "30 CM",
+    "istenen": 10.0,
+    "etiket": "",
+    "name": "Food Stretch Film",
+    "name2": ""
   },
   {
     "tarih": "",
@@ -14,7 +131,43 @@
     "width": "Standart Size",
     "istenen": 10.0,
     "etiket": "",
-    "name" : "PRINTED DIE-CUT ",
-    "name2": "(PATCH HANDLE) REINFORCED BAG"
+    "name": "PRINTED DIE-CUT (PATCH HANDLE) REINFORCED BAG",
+    "name2": ""
+  },
+  {
+    "tarih": "",
+    "sicil": "",
+    "width": "Standart Size",
+    "istenen": 10.0,
+    "etiket": "",
+    "name": "PRINTED VEST CARRIER BAG",
+    "name2": ""
+  },
+  {
+    "tarih": "",
+    "sicil": "",
+    "width": "Standart Size",
+    "istenen": 10.0,
+    "etiket": "",
+    "name": "PRINTED LOOP HANDLE BAG",
+    "name2": ""
+  },
+  {
+    "tarih": "",
+    "sicil": "",
+    "width": "Standart Size",
+    "istenen": 10.0,
+    "etiket": "",
+    "name": "PLAIN COLOUR DIE-CUT (PATCH HANDLE) REINFORCED BAG",
+    "name2": ""
+  },
+  {
+    "tarih": "",
+    "sicil": "",
+    "width": "Standart Size",
+    "istenen": 10.0,
+    "etiket": "",
+    "name": "PLAIN COLOUR LOOP HANDLE BAG",
+    "name2": ""
   }
 ]

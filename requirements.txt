@@ -13,6 +13,9 @@ pyserial==3.5
 # USB communication for direct printer connection
 pyusb
 
+# PDF generation for Windows printing
+reportlab
+
 # Additional utilities
 asyncio-mqtt==0.16.1
 
