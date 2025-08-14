@@ -41,6 +41,7 @@ except ImportError:
 from usb_auto_recovery_printer import USBAutoRecoveryPrinter, USBErrorType
 from usb_direct_printer import DirectUSBPrinter, USBPrinterType, KNOWN_USB_PRINTERS
 from label_generators import get_label_generator
+from pallet_summary_generator import get_pallet_summary_generator
 
 # Configure logging
 logging.basicConfig(
@@ -341,15 +342,27 @@ class WebSocketPrinterClient:
         try:
             logger.info(f"Received print job data: {data}")
             
+            # Fix field mapping - WebSocket sends camelCase, we need snake_case
             job = PrintJob(
-                job_id=data.get('job_id', ''),
-                label_data=data.get('label_data', {}),
+                job_id=data.get('jobId', data.get('job_id', '')),
+                label_data=data.get('labelData', data.get('label_data', {})),
                 timestamp=data.get('timestamp', ''),
                 requested_by=data.get('requested_by', None)
             )
             
+            # Also get labelType from top level (WebSocket structure)
+            label_type_from_websocket = data.get('labelType', '')
+            
             logger.info(f"Created print job: {job.job_id}")
             logger.debug(f"Job label_data: {job.label_data}")
+            print(f"Raw WebSocket data: {data}")
+            print(f"WebSocket labelType: {label_type_from_websocket}")
+            print(f"Mapped job_id: {job.job_id}")
+            print(f"Mapped label_data: {job.label_data}")
+            
+            # Add labelType to label_data for processing
+            if label_type_from_websocket and 'type' not in job.label_data:
+                job.label_data['type'] = label_type_from_websocket
             
             # Process the print job
             success = await self._process_print_job(job)
@@ -378,30 +391,53 @@ class WebSocketPrinterClient:
             label_data = job.label_data
             print(f"Label data: {label_data}")
             print(f"Label data type: {type(label_data)}")
+            print(f"Label data keys: {list(label_data.keys())}")
+            print(f"Label data length: {len(label_data)}")
             
             label_type = label_data.get('type', 'auto')
             
             logger.info(f"Processing print job {job.job_id} with type: {label_type}")
             logger.debug(f"Label data received: {label_data}")
             print(f'Detected label_type: {label_type}')
+            
+            # Check if label_data is empty or has only 'type' field
+            if not label_data or (len(label_data) == 1 and 'type' in label_data):
+                print("Label data is empty or has only type field, generating default test label")
+                logger.info("Label data is empty, generating default test label")
+                label_generator = get_label_generator("zpl")
+                zpl_command = label_generator.generate_test_label({})
             # Generate label based on type or auto-detect from data
-            if label_type == 'custom_zpl':
+            elif label_type == 'custom_zpl':
                 # Direct ZPL command provided
                 zpl_command = label_data.get('zpl_command', '')
                 logger.info("Using direct ZPL command from label_data")
             elif label_type == 'pallet' or label_type == 'palet':
-                # Pallet label with specific data
+                # Pallet label with specific data - now supports dual printing
                 logger.info("Generating pallet label using provided data")
                 label_generator = get_label_generator("zpl")
                 zpl_command = label_generator.generate_pallet_label(label_data)
-            elif label_type == 'test' and len(label_data) <= 1:
-                # Test label with no additional data - use default test label
-                logger.info("Generating default test label (no custom data provided)")
+                
+                # Check if summary printing is requested
+                if label_data.get('print_summary', True):  # Default to True for pallet labels
+                    await self._generate_and_save_pallet_summary(label_data, job.job_id)
+            elif label_type == 'location':
+                # Location label with specific data
+                logger.info("Generating location label using provided data")
                 label_generator = get_label_generator("zpl")
-                zpl_command = label_generator.generate_test_label({})
+                zpl_command = label_generator.generate_location_label(label_data)
+            elif label_type == 'test':
+                # Test label - could be with or without data
+                if len(label_data) <= 1:
+                    # Test label with no additional data - use default test label
+                    logger.info("Generating default test label (no custom data provided)")
+                    label_generator = get_label_generator("zpl")
+                    zpl_command = label_generator.generate_test_label({})
+                else:
+                    # Test label with custom data
+                    logger.info("Generating test label with custom data")
+                    zpl_command = self._generate_custom_label(label_data)
             else:
                 # Any other case - use custom label generation with provided data
-                # This includes: test with data, custom, auto, or any unknown type
                 logger.info(f"Generating custom label using provided data for type: {label_type}")
                 zpl_command = self._generate_custom_label(label_data)
             
@@ -681,6 +717,102 @@ class WebSocketPrinterClient:
             
         except Exception as e:
             logger.error(f"Error handling health check: {e}")
+    
+    async def _generate_and_save_pallet_summary(self, pallet_data: Dict[str, Any], job_id: str):
+        """Generate pallet summary in A5 format and save to file"""
+        try:
+            logger.info(f"Generating pallet summary for job {job_id}")
+            
+            # Create summary generator
+            summary_generator = get_pallet_summary_generator()
+            
+            # Generate HTML summary (A5 format)
+            html_summary = summary_generator.generate_html_summary(pallet_data)
+            
+            # Generate text summary (for basic printers)
+            text_summary = summary_generator.generate_text_summary(pallet_data)
+            
+            # Create output directory if it doesn't exist
+            import os
+            output_dir = "pallet_summaries"
+            if not os.path.exists(output_dir):
+                os.makedirs(output_dir)
+            
+            # Get pallet ID for filename
+            pallet_id = pallet_data.get('palet_id', pallet_data.get('pallet_id', job_id))
+            timestamp = time.strftime('%Y%m%d_%H%M%S')
+            
+            # Save HTML version
+            html_filename = f"{output_dir}/pallet_summary_{pallet_id}_{timestamp}.html"
+            with open(html_filename, 'w', encoding='utf-8') as f:
+                f.write(html_summary)
+            
+            # Save text version
+            txt_filename = f"{output_dir}/pallet_summary_{pallet_id}_{timestamp}.txt"
+            with open(txt_filename, 'w', encoding='utf-8') as f:
+                f.write(text_summary)
+            
+            logger.info(f"✅ Pallet summary saved:")
+            logger.info(f"   HTML: {html_filename}")
+            logger.info(f"   Text: {txt_filename}")
+            
+            # Try to print HTML version if default printer is available
+            await self._print_summary_to_default_printer(html_filename)
+            
+        except Exception as e:
+            logger.error(f"Error generating pallet summary: {e}")
+    
+    async def _print_summary_to_default_printer(self, html_file_path: str):
+        """Print the HTML summary to the default system printer"""
+        try:
+            import subprocess
+            import platform
+            
+            system = platform.system()
+            logger.info(f"Attempting to print summary on {system}")
+            
+            if system == "Darwin":  # macOS
+                # Use system print command
+                cmd = ["lpr", "-P", "default", "-o", "media=A5", html_file_path]
+                result = subprocess.run(cmd, capture_output=True, text=True)
+                
+                if result.returncode == 0:
+                    logger.info("✅ Summary sent to default printer successfully")
+                else:
+                    # Try alternative method - open with default browser for printing
+                    cmd = ["open", "-a", "Safari", html_file_path]
+                    subprocess.run(cmd)
+                    logger.info("📄 Summary opened in browser for manual printing")
+                    
+            elif system == "Windows":
+                # Use Windows print command
+                cmd = ["print", "/D:default", html_file_path]
+                result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+                
+                if result.returncode == 0:
+                    logger.info("✅ Summary sent to default printer successfully")
+                else:
+                    # Try alternative method - open with default browser
+                    import webbrowser
+                    webbrowser.open(html_file_path)
+                    logger.info("📄 Summary opened in browser for manual printing")
+                    
+            elif system == "Linux":
+                # Use Linux print command
+                cmd = ["lp", "-d", "default", "-o", "media=A5", html_file_path]
+                result = subprocess.run(cmd, capture_output=True, text=True)
+                
+                if result.returncode == 0:
+                    logger.info("✅ Summary sent to default printer successfully")
+                else:
+                    # Try alternative method - open with default browser
+                    import webbrowser
+                    webbrowser.open(html_file_path)
+                    logger.info("📄 Summary opened in browser for manual printing")
+            
+        except Exception as e:
+            logger.warning(f"Could not print summary automatically: {e}")
+            logger.info(f"📄 Summary file available at: {html_file_path}")
     
     async def start(self):
         """Start the WebSocket client"""

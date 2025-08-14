@@ -200,61 +200,82 @@ class ZPLLabelGenerator(LabelGeneratorBase):
     """ZPL (Zebra Programming Language) command generator"""
     
     def generate_location_label(self, data: Dict[str, Any]) -> str:
-        """Generate ZPL commands for location label"""
-        zpl = []
+        """Generate ZPL commands for location label using location.zpl template"""
+        import os
         
-        # Start label
-        zpl.append("^XA")
+        # Read the location.zpl template
+        template_path = os.path.join(os.path.dirname(__file__), 'location.zpl')
+        try:
+            with open(template_path, 'r', encoding='utf-8') as f:
+                zpl_template = f.read()
+        except FileNotFoundError:
+            # Fallback to embedded template if file not found
+            zpl_template = """^XA
+        ^FX set width and height
+        ^PW799 ^FX size in points = 100 mm width
+        ^LL630   ^FX size in points = 80 mm height
+        ^CI28
+        ^MMT    ^FX set media type to Tear-off
+        ^BY3,3  ^FX set the bar code height and gap between labels (gap in dots, 3 mm = 12 dots at 8 dots/mm)
+        ^FX border start
+        ^FO10,10^GB750,2,2^FS ^FX TOP
+        ^FO10,10^GB2,600,2,B^FS ^FX LEFT
+        ^FO759,10^GB2,600,2,B^FS ^FX RIGHT
+        ^FO10,618^GB750,2,2^FS ^FX BOTTOM
+        ^FX border end
+        ^FX companySection
+        ^FO18,25
+        ^A0N,25,25
+        ^FDFrima Adi / Depo^FS
+
+        ^FO25,55
+        ^A0N,50,50
+        ^FDBil Plastik Ambalaj / Ana Fabrika^FS
+
+        ^FO10,110^GB750,2,2^FS 
+        ^FX end of CompanySection
+
+        ^FO18,120
+        ^A0N,35,35
+        ^FDSevkiyat Ürün Deposu  ^FS  ^FS ^FX 30 charecter max        
+        ^FX start bottom table
+        ^CF0,40
+        ^FO10,200^FB375,1,0,C^FDAlt Raf^FS
+        ^A0N,30,30^FO10,250^FB375,1,0,C^FDDP-S-{i}1^FS
+        ^FO90,320
+        ^BQN,2,10
+        ^FDLA,DP-S-{i}1^FS
+
+        ^CF0,40
+        ^FO390,200^FB375,1,0,C^FDÜst Raf^FS
+        ^A0N,30,30^FO390,250^FB375,1,0,C^FDDP-S-{i}2^FS
+        ^FO470,320
+        ^BQN,2,10
+        ^FDLA,DP-S-{i}2^FS
+        ^FO10,170^GB375,450,2^FS
+        ^FO385,170^GB375,450,2^FS
+        ^XZ"""
         
-        # Set label size (adjust as needed)
-        zpl.append("^LH0,0")
-        zpl.append("^PW400")
+        # Extract data for template placeholders
+        location_id = data.get('id', data.get('locationId', '1'))
+        location_name = data.get('locationName', 'Sevkiyat Ürün Deposu')
+        warehouse_code = data.get('warehouseCode', 'Ana Fabrika')
+        barcode = data.get('barcode', f'LOC{location_id:06d}')
         
-        # Title
-        zpl.append("^FO50,30")
-        zpl.append("^CF0,30")
-        zpl.append("^FDLOCATION LABEL^FS")
+        # Replace placeholders in template
+        # {i} placeholder is used for location ID in the template
+        zpl_command = zpl_template.replace('{i}', str(location_id))
         
-        # Barcode
-        barcode = data.get('barcode', '')
-        if barcode:
-            zpl.append("^FO50,80")
-            zpl.append("^BY2,3,50")
-            zpl.append(f"^BC^FD{barcode}^FS")
+        # If we want to customize company/warehouse info, we can add more replacements
+        if 'locationName' in data and data['locationName']:
+            # Replace the default location name with actual data
+            zpl_command = zpl_command.replace('Sevkiyat Ürün Deposu', location_name)
         
-        # Location data
-        y_pos = 160
-        zpl.append(f"^FO50,{y_pos}")
-        zpl.append("^CF0,20")
-        zpl.append(f"^FDLocation: {data.get('locationName', 'N/A')}^FS")
+        if 'warehouseCode' in data and data['warehouseCode']:
+            # Replace the default warehouse with actual data  
+            zpl_command = zpl_command.replace('Ana Fabrika', warehouse_code)
         
-        y_pos += 25
-        zpl.append(f"^FO50,{y_pos}")
-        zpl.append(f"^FDWarehouse: {data.get('warehouseCode', 'N/A')}^FS")
-        
-        y_pos += 25
-        zpl.append(f"^FO50,{y_pos}")
-        zpl.append(f"^FDType: {data.get('locationType', 'N/A')}^FS")
-        
-        # Position
-        aisle = data.get('aisle', '')
-        bay = data.get('bay', '')
-        level = data.get('level', '')
-        if aisle or bay or level:
-            y_pos += 25
-            zpl.append(f"^FO50,{y_pos}")
-            zpl.append(f"^FDPosition: {aisle}-{bay}-{level}^FS")
-        
-        # Print timestamp
-        y_pos += 40
-        zpl.append(f"^FO50,{y_pos}")
-        zpl.append("^CF0,15")
-        zpl.append(f"^FDPrinted: {data.get('printedAt', time.strftime('%Y-%m-%d %H:%M:%S'))}^FS")
-        
-        # End label
-        zpl.append("^XZ")
-        
-        return "\n".join(zpl)
+        return zpl_command
     
     def generate_pallet_label(self, data: Dict[str, Any]) -> str:
         """Generate ZPL commands for pallet label using the palet.zpl template"""

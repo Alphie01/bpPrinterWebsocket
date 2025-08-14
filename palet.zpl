@@ -28,7 +28,8 @@
 
 ^FO18,120
 ^A0N,35,35
-^FD{sevkiyat_bilgisi}^FS ^FX 30 character max
+^A0N,30,30^FD{sevkiyat_bilgisi}^FS ^FX 30 character max
+
 
 ^FO10,160^GB750,2,2^FS 
 
@@ -44,16 +45,16 @@
 
 ^FX start bottom section
 ^CF0,40
-^FO20,300^FDTeslim Alınan Firma - Bölüm: {teslim_firma}^FS
-^FO20,350^FDSipariş Tarihi: {siparis_tarihi}^FS
-^FO20,400^FDPalet ID: {palet_id}^FS
-^FO20,450^FDDurum: {durum}^FS
-^FO20,500^FDBrüt KG.: {brut_kg}^FS
-^FO20,550^FDNet KG.: {net_kg}^FS
+^A0N,30,30^FO20,300^FDFirma - Bölüm: {teslim_firma}^FS
+^A0N,30,30^FO20,350^FDSipariş Tarihi: {siparis_tarihi}^FS
+^A0N,30,30^FO20,400^FDPalet ID: {palet_id}^FS
+^A0N,30,30^FO20,450^FDDurum: {durum}^FS
+^A0N,30,30^FO20,500^FDBrüt KG.: {brut_kg}^FS
+^A0N,30,30^FO20,550^FDNet KG.: {net_kg}^FS
 
 ^FX QR Code section
 ^CF0,40
-^FO620,470
+^FO620,430
 ^BQN,2,6
 ^FDLA,{palet_id}-{lot_no}^FS
 

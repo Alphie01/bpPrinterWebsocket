@@ -6,6 +6,12 @@ USB-Only WebSocket Printer Client Runner
 Simple entry point to start the USB-only WebSocket printer client.
 This version removes all COM port dependencies and uses only direct USB communication.
 
+NEW FEATURE: Pallet Summary Generation
+- When printing pallet labels, the system now automatically generates
+- A5 format summary reports in both HTML and text formats
+- Summaries are saved locally and sent to the default system printer
+- Perfect for detailed pallet documentation and compliance
+
 Usage:
     python run_usb_client.py
 
@@ -166,7 +172,14 @@ def display_printer_info():
 async def main():
     """Main function"""
     print("USB-Only WebSocket Printer Client")
-    print("Version: 2.0.0 (No COM port dependencies)")
+    print("Version: 2.1.0 (Enhanced with Pallet Summary Generation)")
+    print()
+    
+    print("🆕 NEW FEATURE: Automatic Pallet Summary Generation")
+    print("   📋 A5 format summaries for pallet labels")
+    print("   🖨️  Automatic printing to default system printer") 
+    print("   💾 HTML and text formats saved locally")
+    print("   🇹🇷 Full Turkish language support")
     print()
     
     # Display printer information
@@ -207,6 +220,9 @@ async def main():
         print("✅ Connecting to WebSocket server...")
         print("📋 Registering printer...")
         print("🎯 Waiting for print jobs...")
+        print()
+        print("📁 Pallet summaries will be saved to: ./pallet_summaries/")
+        print("📄 Summary formats: HTML (A5) and Text")
         print()
         print("Press Ctrl+C to stop")
         print()
