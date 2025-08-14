@@ -756,7 +756,7 @@ class WebSocketPrinterClient:
             logger.info(f"   HTML: {html_filename}")
             logger.info(f"   Text: {txt_filename}")
             
-            # Try to print HTML version if default printer is available
+            # Try to print summary to default printer
             await self._print_summary_to_default_printer(html_filename)
             
         except Exception as e:
@@ -772,17 +772,25 @@ class WebSocketPrinterClient:
             logger.info(f"Attempting to print summary on {system}")
             
             if system == "Darwin":  # macOS
-                # Use system print command
-                cmd = ["lpr", "-P", "default", "-o", "media=A5", html_file_path]
-                result = subprocess.run(cmd, capture_output=True, text=True)
-                
-                if result.returncode == 0:
-                    logger.info("✅ Summary sent to default printer successfully")
+                # Try to print text version first (better compatibility)
+                txt_file = html_file_path.replace('.html', '.txt')
+                if os.path.exists(txt_file):
+                    cmd = ["lpr", txt_file]
+                    result = subprocess.run(cmd, capture_output=True, text=True)
+                    
+                    if result.returncode == 0:
+                        logger.info("✅ Summary (text) sent to default printer successfully")
+                    else:
+                        logger.warning(f"Text printing failed: {result.stderr}")
+                        # Fallback: Open Safari for manual printing
+                        cmd = ["open", "-a", "Safari", html_file_path]
+                        subprocess.run(cmd)
+                        logger.info("📄 Summary opened in Safari for manual printing")
                 else:
-                    # Try alternative method - open with default browser for printing
+                    # No text file, open Safari for manual printing
                     cmd = ["open", "-a", "Safari", html_file_path]
                     subprocess.run(cmd)
-                    logger.info("📄 Summary opened in browser for manual printing")
+                    logger.info("📄 Summary opened in Safari for manual printing")
                     
             elif system == "Windows":
                 # Use Windows print command
