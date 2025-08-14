@@ -777,11 +777,15 @@ class WebSocketPrinterClient:
                     
                     if result.returncode == 0:
                         logger.info("✅ PDF summary sent to default printer successfully (PowerShell)")
+                        # PDF başarıyla yazdırıldı, dosyayı sil
+                        await self._cleanup_pdf_file(pdf_file_path)
                     elif result.returncode == 2:
                         logger.warning("No default printer found")
                         # Method 2: Use Windows print dialog
                         subprocess.run(["start", "/wait", pdf_file_path], shell=True)
                         logger.info("📄 PDF opened with print dialog")
+                        # Print dialog açıldıktan sonra da sil (kullanıcı yazdıracaktır)
+                        await self._cleanup_pdf_file(pdf_file_path, delay=5)
                     else:
                         raise Exception(f"PowerShell print failed: {result.stderr}")
                         
@@ -790,11 +794,15 @@ class WebSocketPrinterClient:
                     # Fallback: Open with default PDF viewer
                     subprocess.run(["start", pdf_file_path], shell=True)
                     logger.info("📄 PDF opened with default viewer (timeout fallback)")
+                    # Timeout sonrası da sil
+                    await self._cleanup_pdf_file(pdf_file_path, delay=10)
                 except Exception as e:
                     logger.warning(f"PowerShell print failed: {e}")
                     # Fallback: Open with default PDF viewer for manual printing
                     subprocess.run(["start", pdf_file_path], shell=True)
                     logger.info("📄 PDF opened with default viewer for manual printing")
+                    # Fallback durumunda da sil
+                    await self._cleanup_pdf_file(pdf_file_path, delay=10)
                     
             elif system == "Darwin":  # macOS (for testing)
                 # macOS - Use lpr with PDF
@@ -803,12 +811,16 @@ class WebSocketPrinterClient:
                 
                 if result.returncode == 0:
                     logger.info("✅ PDF summary sent to default printer successfully")
+                    # PDF başarıyla yazdırıldı, dosyayı sil
+                    await self._cleanup_pdf_file(pdf_file_path)
                 else:
                     logger.warning(f"lpr failed: {result.stderr}")
                     # Fallback: Open with default PDF viewer
                     cmd = ["open", pdf_file_path]
                     subprocess.run(cmd)
                     logger.info("📄 PDF opened with default viewer for manual printing")
+                    # Fallback durumunda da sil
+                    await self._cleanup_pdf_file(pdf_file_path, delay=5)
                     
             elif system == "Linux":
                 # Linux - Use lp command for PDF printing
@@ -817,15 +829,37 @@ class WebSocketPrinterClient:
                 
                 if result.returncode == 0:
                     logger.info("✅ PDF summary sent to default printer successfully (Linux)")
+                    # PDF başarıyla yazdırıldı, dosyayı sil
+                    await self._cleanup_pdf_file(pdf_file_path)
                 else:
                     logger.warning(f"lp command failed: {result.stderr}")
                     # Fallback: Open with default PDF viewer
                     subprocess.run(["xdg-open", pdf_file_path])
                     logger.info("📄 PDF opened with default viewer for manual printing")
+                    # Fallback durumunda da sil
+                    await self._cleanup_pdf_file(pdf_file_path, delay=5)
             
         except Exception as e:
             logger.warning(f"Could not print PDF summary automatically: {e}")
             logger.info(f"📄 PDF file available at: {pdf_file_path}")
+            # Hata durumunda da temizlik yap
+            await self._cleanup_pdf_file(pdf_file_path, delay=30)
+    
+    async def _cleanup_pdf_file(self, pdf_file_path: str, delay: int = 2):
+        """Clean up PDF file after printing with optional delay"""
+        try:
+            if delay > 0:
+                logger.info(f"⏳ Waiting {delay} seconds before cleaning up PDF...")
+                await asyncio.sleep(delay)
+            
+            if os.path.exists(pdf_file_path):
+                os.remove(pdf_file_path)
+                logger.info(f"🗑️  PDF file cleaned up: {os.path.basename(pdf_file_path)}")
+            else:
+                logger.debug(f"PDF file not found for cleanup: {pdf_file_path}")
+                
+        except Exception as e:
+            logger.warning(f"Could not clean up PDF file {pdf_file_path}: {e}")
     
     async def start(self):
         """Start the WebSocket client"""

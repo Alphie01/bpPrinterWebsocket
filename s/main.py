@@ -177,7 +177,7 @@ with open(file_path, 'r', encoding='utf-8') as file:
 for obj in data:
     count+=1
     x = 0
-    for x in range(40):
+    for x in range(1):
         zpl_label = generate_zpl_label(
             "T. İŞ BANKASI A.Ş DESTEL",
             obj['tarih'],
@@ -201,5 +201,5 @@ for obj in data:
         print(zpl_label)
         print(count)
         send_zpl_with_auto_recovery(zpl_label)
-    time.sleep(10)
+    """ time.sleep(10) """
     

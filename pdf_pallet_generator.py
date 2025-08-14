@@ -270,44 +270,43 @@ class PalletPDFGenerator:
         if not text:
             return ""
         
-        # Character mapping for Turkish characters
-        char_map = {
-            'ç': 'c',  # We'll use simpler approach for now
-            'Ç': 'C',
-            'ğ': 'g', 
-            'Ğ': 'G',
-            'ı': 'i',
-            'İ': 'I',
-            'ö': 'o',
-            'Ö': 'O',
-            'ş': 's',
-            'Ş': 'S',
-            'ü': 'u',
-            'Ü': 'U'
-        }
-        
-        # For better compatibility, let's use HTML entities
-        html_entities = {
-            'ç': '&#231;',  # ç
-            'Ç': '&#199;',  # Ç  
-            'ğ': '&#287;',  # ğ
-            'Ğ': '&#286;',  # Ğ
-            'ı': '&#305;',  # ı
-            'İ': '&#304;',  # İ
-            'ö': '&#246;',  # ö
-            'Ö': '&#214;',  # Ö
-            'ş': '&#351;',  # ş
-            'Ş': '&#350;',  # Ş
-            'ü': '&#252;',  # ü
-            'Ü': '&#220;'   # Ü
-        }
-        
-        # First try with HTML entities
-        encoded_text = text
-        for char, entity in html_entities.items():
-            encoded_text = encoded_text.replace(char, entity)
-        
-        return encoded_text
+        # Use ReportLab's built-in encoding support
+        try:
+            # For ReportLab, we can use unicode directly if we escape special characters
+            # and rely on font handling
+            
+            # Simple character replacement for better compatibility
+            replacements = {
+                'ç': 'c',
+                'Ç': 'C', 
+                'ğ': 'g',
+                'Ğ': 'G',
+                'ı': 'i',
+                'İ': 'I',
+                'ö': 'o',
+                'Ö': 'O',
+                'ş': 's',
+                'Ş': 'S',
+                'ü': 'u',
+                'Ü': 'U'
+            }
+            
+            # Use unicode with fallback to ASCII replacements
+            encoded = text
+            
+            # If we have unicode support, try to preserve original
+            try:
+                encoded.encode('latin-1')
+                return encoded  # Can be encoded in latin-1, should work
+            except UnicodeEncodeError:
+                # Fall back to character replacement
+                for turkish, replacement in replacements.items():
+                    encoded = encoded.replace(turkish, replacement)
+                return encoded
+                
+        except Exception:
+            # Ultimate fallback - just return as-is
+            return text
 
 
 def get_pdf_pallet_generator() -> PalletPDFGenerator:
