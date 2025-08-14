@@ -183,6 +183,7 @@ async def simulate_print_job():
             
             # Geçici dosyayı temizle (biraz bekledikten sonra)
             import threading
+            import time
             def cleanup():
                 time.sleep(10)  # Safari'nin dosyayı yüklemesi için bekle
                 try:

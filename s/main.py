@@ -32,7 +32,7 @@ def get_server_url():
 
 
 def generate_zpl_label(
-    firma, production_date, lot_code, product_code, product_name, personel_code,
+    firma, production_date, lot_code, product_code, name1, name2, personel_code,
     total_amount, qr_code, bom, hat_kodu, siparis_kodu, firma_kodu, adet_bilgisi,
     uretim_miktari_checked=True, adet_girisi_checked=True,
     firma_bilgileri_checked=True, brut_kg_checked=True
@@ -41,7 +41,7 @@ def generate_zpl_label(
         return text[:length], text[length:] if len(text) > length else ""
 
     code1, code2 = split_string(product_code)
-    name1, name2 = split_string(product_name)
+    """ name1, name2 = split_string(product_name) """
     
     kg_total_amount = (
         "^CF0,25\n"
@@ -93,28 +93,11 @@ def generate_zpl_label(
         ^FX companySection
         ^FO18,25
         ^A0N,25,25
-        ^FDFrima Adi /Customer Name^FS
+        ^FDProduced By^FS
 
         ^FO25,55
         ^A0N,50,50
-        ^FD{firma}^FS
-
-        ^FX black box
-        ^FO660,10
-        ^GB100,100,80^FS
-        ^FR
-        ^FO665,30
-        ^A0N,80,80
-        ^FD {hat_kodu}^FS
-        ^FX end of black box
-
-        ^FX border start
-        ^FO550,35
-        ^GB100,50,4^FS    
-        ^FO560,45
-        ^A0N,45,45
-        ^FD {bom}^FS   
-        ^FX border end
+        ^FDPolyBil^FS
 
         ^FO10,110^GB750,2,2^FS 
         ^FX end of CompanySection
@@ -132,7 +115,7 @@ def generate_zpl_label(
         ^FD{name1}^FS ^FX 35 charecter max
         ^FO18,220
         ^A0N,42,42
-        ^FD${name2}^FS ^FX 35 charecter max
+        ^FD{name2}^FS ^FX 35 charecter max
         ^FO10,270^GB750,2,2^FS 
         ^FO10,275^GB750,2,2^FS 
         ^FX start table
@@ -144,9 +127,9 @@ def generate_zpl_label(
         ^FO510,275^GB250,50,2 ^FS
 
         ^CF0,30
-        ^A0N,20,20^FO10,290^FB250,1,0,C^FDU. Tarihi / Production Date^FS
-        ^A0N,25,25^FO260,290^FB250,1,0,C^FDLot kodu / Lot Code^FS
-        ^A0N,25,25^FO510,290^FB250,1,0,C^FDP.kodu / E. Code^FS
+        ^A0N,20,20^FO10,290^FB250,1,0,C^FDColor^FS
+        ^A0N,25,25^FO260,290^FB250,1,0,C^FDWidth^FS
+        ^A0N,25,25^FO510,290^FB250,1,0,C^FDHeight^FS
 
 
         ^FO10,325^GB250,50,2^FS
@@ -158,37 +141,22 @@ def generate_zpl_label(
         ^A0N,25,25^FO270,340^FB250,1,0,C^FD{lot_code}^FS
         ^A0N,25,25^FO530,340^FB250,1,0,C^FD{personel_code}^FS
 
-        ^FX end of table
 
-        ^FX start bottom table
         
-        ^FO10,375^GB375,100,2^FS
-        ^FO385,375^GB270,100,2 ^FS
-        
-  
-        ^FO665,375^BQN,2,4
-        ^FDQA,{product_code}^FS
-        
-        ^FX END BOTTOM TABLE
-        
-        
-        ^FX start bottom table
-        
-        ^FO10,480^GB375,140,2^FS
-        ^FO385,480^GB375,140,2^FS
+
 
             """
     
     zpl_label.append(start_main_design)
     
-    if uretim_miktari_checked:
+    """ if uretim_miktari_checked:
         zpl_label.append(kg_total_amount)
     if adet_girisi_checked:
         zpl_label.append(paket_ici_adet)
     if firma_bilgileri_checked:
         zpl_label.append(firma_bilgileri)
     if brut_kg_checked:
-        zpl_label.append(brut_kg)
+        zpl_label.append(brut_kg) """
     
     zpl_label.append("^XZ")
     
@@ -210,9 +178,10 @@ for obj in data:
     zpl_label = generate_zpl_label(
         "T. İŞ BANKASI A.Ş DESTEL",
         obj['tarih'],
-        "98649 - 004",
+        obj['width'],
         obj['etiket'],
-        "(LDPE) SEFFAF 12 DELiKLi PARA TORBASI BASKISIZ SEFFAF 100 Mic 38x60",
+        obj['name'],
+        obj['name2'],
         obj['sicil'],
         obj.get("total_amount", "100"),
         obj['etiket'],
