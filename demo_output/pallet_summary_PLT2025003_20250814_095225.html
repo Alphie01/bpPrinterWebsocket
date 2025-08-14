@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Palet Özet Raporu - PLT2025003</title>
+    <style>
+        @page {
+            size: A5;
+            margin: 15mm;
+        }
+        
+        body {
+            font-family: 'Arial', sans-serif;
+            font-size: 10pt;
+            line-height: 1.2;
+            margin: 0;
+            padding: 0;
+            color: #333;
+        }
+        
+        .header {
+            text-align: center;
+            border-bottom: 2px solid #333;
+            padding-bottom: 10px;
+            margin-bottom: 15px;
+        }
+        
+        .company-name {
+            font-size: 14pt;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+        
+        .report-title {
+            font-size: 12pt;
+            font-weight: bold;
+            color: #666;
+        }
+        
+        .info-section {
+            margin-bottom: 15px;
+        }
+        
+        .info-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 10px;
+        }
+        
+        .info-table td {
+            padding: 3px 5px;
+            border: 1px solid #ddd;
+            font-size: 9pt;
+        }
+        
+        .info-table .label {
+            background-color: #f5f5f5;
+            font-weight: bold;
+            width: 40%;
+        }
+        
+        .items-section {
+            margin-bottom: 15px;
+        }
+        
+        .items-title {
+            font-size: 11pt;
+            font-weight: bold;
+            margin-bottom: 10px;
+            border-bottom: 1px solid #333;
+            padding-bottom: 3px;
+        }
+        
+        .items-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 8pt;
+        }
+        
+        .items-table th {
+            background-color: #333;
+            color: white;
+            padding: 4px 2px;
+            text-align: left;
+            font-weight: bold;
+        }
+        
+        .items-table td {
+            padding: 3px 2px;
+            border: 1px solid #ddd;
+        }
+        
+        .items-table tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+        
+        .summary-section {
+            border-top: 2px solid #333;
+            padding-top: 10px;
+            margin-top: 15px;
+        }
+        
+        .summary-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        .summary-table td {
+            padding: 4px 5px;
+            font-weight: bold;
+        }
+        
+        .summary-table .total-row {
+            background-color: #333;
+            color: white;
+        }
+        
+        .footer {
+            margin-top: 15px;
+            text-align: center;
+            font-size: 8pt;
+            color: #666;
+            border-top: 1px solid #ddd;
+            padding-top: 5px;
+        }
+        
+        .status {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 3px;
+            font-weight: bold;
+            font-size: 9pt;
+        }
+        
+        .status.ready {
+            background-color: #4CAF50;
+            color: white;
+        }
+        
+        .status.pending {
+            background-color: #FF9800;
+            color: white;
+        }
+        
+        .status.shipped {
+            background-color: #2196F3;
+            color: white;
+        }
+        
+        @media print {
+            body { -webkit-print-color-adjust: exact; }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="company-name">Bil Plastik Ambalaj San. ve Tic. A.Ş.</div>
+        <div class="report-title">PALET ÖZET RAPORU</div>
+    </div>
+    
+    <div class="info-section">
+        <table class="info-table">
+            <tr>
+                <td class="label">Palet ID:</td>
+                <td>PLT2025003</td>
+                <td class="label">Durum:</td>
+                <td><span class="status pending">SEVKİYATA HAZIR</span></td>
+            </tr>
+            <tr>
+                <td class="label">Depo:</td>
+                <td>Ana Üretim Deposu</td>
+                <td class="label">Sipariş Tarihi:</td>
+                <td>2025-08-14</td>
+            </tr>
+            <tr>
+                <td class="label">Teslim Alacak Firma:</td>
+                <td colspan="3">Mega Ambalaj Sanayi Ltd. Şti.</td>
+            </tr>
+        </table>
+    </div>
+    
+    <div class="items-section">
+        <div class="items-title">Palet İçeriği (4 Kalem)</div>
+        <table class="items-table">
+            <thead>
+                <tr>
+                    <th style="width: 15%;">Ürün Kodu</th>
+                    <th style="width: 35%;">Ürün Adı</th>
+                    <th style="width: 10%;">Adet</th>
+                    <th style="width: 8%;">Birim</th>
+                    <th style="width: 12%;">Birim Ağırlık</th>
+                    <th style="width: 12%;">Toplam Ağırlık</th>
+                    <th style="width: 8%;">Lot No</th>
+                </tr>
+            </thead>
+            <tbody>
+        
+                <tr>
+                    <td>LDPE-001</td>
+                    <td>LDPE Film Naturel 50mic</td>
+                    <td style="text-align: right;">20</td>
+                    <td>kg</td>
+                    <td style="text-align: right;">1.00 kg</td>
+                    <td style="text-align: right;">20.00 kg</td>
+                    <td>LOT240814A</td>
+                </tr>
+            
+                <tr>
+                    <td>LDPE-002</td>
+                    <td>LDPE Film Siyah 80mic</td>
+                    <td style="text-align: right;">30</td>
+                    <td>kg</td>
+                    <td style="text-align: right;">1.00 kg</td>
+                    <td style="text-align: right;">30.00 kg</td>
+                    <td>LOT240814B</td>
+                </tr>
+            
+                <tr>
+                    <td>LDPE-003</td>
+                    <td>LDPE Film Şeffaf 100mic</td>
+                    <td style="text-align: right;">25</td>
+                    <td>kg</td>
+                    <td style="text-align: right;">1.00 kg</td>
+                    <td style="text-align: right;">25.00 kg</td>
+                    <td>LOT240814C</td>
+                </tr>
+            
+                <tr>
+                    <td>LDPE-004</td>
+                    <td>LDPE Film Beyaz 60mic</td>
+                    <td style="text-align: right;">72</td>
+                    <td>kg</td>
+                    <td style="text-align: right;">1.00 kg</td>
+                    <td style="text-align: right;">72.00 kg</td>
+                    <td>LOT240814D</td>
+                </tr>
+            
+            </tbody>
+        </table>
+    </div>
+    
+    <div class="summary-section">
+        <table class="summary-table">
+            <tr class="total-row">
+                <td>TOPLAM ÜRÜN ADEDI:</td>
+                <td style="text-align: right;">4 Kalem</td>
+                <td>BRÜT AĞIRLIK:</td>
+                <td style="text-align: right;">148.50 kg</td>
+            </tr>
+            <tr>
+                <td style="background-color: #f5f5f5;">NET AĞIRLIK:</td>
+                <td style="text-align: right; background-color: #f5f5f5;">147.00 kg</td>
+                <td style="background-color: #f5f5f5;">DARA AĞIRLIĞI:</td>
+                <td style="text-align: right; background-color: #f5f5f5;">1.50 kg</td>
+            </tr>
+        </table>
+    </div>
+    
+    <div class="footer">
+        <p>Rapor Tarihi: 14.08.2025 09:52:26</p>
+        <p>Hazırlayan: Depo Sorumlusu: Mehmet K.</p>
+        <p>Not: Kalite kontrol onaylandı. Müşteri teslim tarihi: 15.08.2025</p>
+        <p>Bu belge bilgisayar ortamında oluşturulmuştur.</p>
+    </div>
+</body>
+</html>

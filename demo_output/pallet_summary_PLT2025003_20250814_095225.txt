@@ -1,0 +1,26 @@
+================================================================================
+                     Bil Plastik Ambalaj San. ve Tic. A.Ş.                      
+                               PALET ÖZET RAPORU                                
+================================================================================
+
+Palet ID: PLT2025003                    Durum: SEVKİYATA HAZIR
+Depo: Ana Üretim Deposu                 Sipariş Tarihi: 2025-08-14
+Teslim Alacak Firma: Mega Ambalaj Sanayi Ltd. Şti.
+
+--------------------------------------------------------------------------------
+PALET İÇERİĞİ (4 Kalem)
+--------------------------------------------------------------------------------
+Kod          Ürün Adı                  Adet   Birim  B.Ağ.    T.Ağ.    Lot     
+--------------------------------------------------------------------------------
+LDPE-001     LDPE Film Naturel 50mic   20     kg     1.00     20.00    LOT24081
+LDPE-002     LDPE Film Siyah 80mic     30     kg     1.00     30.00    LOT24081
+LDPE-003     LDPE Film Şeffaf 100mic   25     kg     1.00     25.00    LOT24081
+LDPE-004     LDPE Film Beyaz 60mic     72     kg     1.00     72.00    LOT24081
+--------------------------------------------------------------------------------
+TOPLAM KALEM: 4                         BRÜT AĞIRLIK: 148.50 kg
+NET AĞIRLIK: 147.00 kg                  DARA: 1.50 kg
+================================================================================
+
+Rapor Tarihi: 14.08.2025 09:52:26
+Hazırlayan: Depo Sorumlusu: Mehmet K.
+Not: Kalite kontrol onaylandı. Müşteri teslim tarihi: 15.08.2025

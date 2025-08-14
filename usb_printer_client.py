@@ -192,6 +192,9 @@ class WebSocketPrinterClient:
         self.max_reconnect_attempts = 10
         self.reconnect_attempts = 0
         
+        # Pallet summary handling
+        self._pending_pallet_summary = None
+        
         # Setup event handlers
         self._setup_event_handlers()
         
@@ -417,9 +420,12 @@ class WebSocketPrinterClient:
                 label_generator = get_label_generator("zpl")
                 zpl_command = label_generator.generate_pallet_label(label_data)
                 
-                # Check if summary printing is requested
-                if label_data.get('print_summary', True):  # Default to True for pallet labels
-                    await self._generate_and_save_pallet_summary(label_data, job.job_id)
+                # Store pallet data for summary generation after successful print
+                self._pending_pallet_summary = {
+                    'data': label_data,
+                    'job_id': job.job_id,
+                    'should_print': label_data.get('print_summary', True)
+                }
             elif label_type == 'location':
                 # Location label with specific data
                 logger.info("Generating location label using provided data")
@@ -457,8 +463,22 @@ class WebSocketPrinterClient:
             
             if success:
                 logger.info(f"Print job {job.job_id} completed successfully")
+                
+                # After successful ZPL printing, handle pallet summary if needed
+                if self._pending_pallet_summary and self._pending_pallet_summary['should_print']:
+                    logger.info("🔄 ZPL label printed successfully, now generating summary report...")
+                    await self._generate_and_save_pallet_summary(
+                        self._pending_pallet_summary['data'],
+                        self._pending_pallet_summary['job_id']
+                    )
+                    self._pending_pallet_summary = None  # Clear pending summary
+                    
             else:
                 logger.error(f"Print job {job.job_id} failed")
+                # Clear pending summary on failure
+                if self._pending_pallet_summary:
+                    logger.warning("Clearing pending summary due to ZPL print failure")
+                    self._pending_pallet_summary = None
             
             return success
             
@@ -767,52 +787,201 @@ class WebSocketPrinterClient:
         try:
             import subprocess
             import platform
+            import os
             
             system = platform.system()
             logger.info(f"Attempting to print summary on {system}")
             
+            # First, check if file exists
+            if not os.path.exists(html_file_path):
+                logger.error(f"HTML file not found: {html_file_path}")
+                return
+            
             if system == "Darwin":  # macOS
-                # Use system print command
-                cmd = ["lpr", "-P", "default", "-o", "media=A5", html_file_path]
-                result = subprocess.run(cmd, capture_output=True, text=True)
+                # Try multiple methods for macOS
                 
-                if result.returncode == 0:
-                    logger.info("✅ Summary sent to default printer successfully")
-                else:
-                    # Try alternative method - open with default browser for printing
+                # Method 1: Try lpr with A5 format
+                try:
+                    cmd = ["lpr", "-P", "default", "-o", "media=A5", "-o", "fit-to-page", html_file_path]
+                    result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+                    
+                    if result.returncode == 0:
+                        logger.info("✅ Summary sent to default printer via lpr successfully")
+                        return
+                    else:
+                        logger.warning(f"lpr failed: {result.stderr}")
+                except Exception as e:
+                    logger.warning(f"lpr method failed: {e}")
+                
+                # Method 2: Try CUPS printing
+                try:
+                    cmd = ["lp", "-d", "default", "-o", "media=A5", "-o", "fit-to-page", html_file_path]
+                    result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+                    
+                    if result.returncode == 0:
+                        logger.info("✅ Summary sent to default printer via CUPS successfully")
+                        return
+                    else:
+                        logger.warning(f"CUPS lp failed: {result.stderr}")
+                except Exception as e:
+                    logger.warning(f"CUPS method failed: {e}")
+                
+                # Method 3: Convert to PDF and print
+                try:
+                    import tempfile
+                    with tempfile.NamedTemporaryFile(suffix='.pdf', delete=False) as tmp_pdf:
+                        # Use wkhtmltopdf if available
+                        pdf_cmd = ["wkhtmltopdf", "--page-size", "A5", "--encoding", "UTF-8", html_file_path, tmp_pdf.name]
+                        pdf_result = subprocess.run(pdf_cmd, capture_output=True, text=True, timeout=30)
+                        
+                        if pdf_result.returncode == 0:
+                            # Print the PDF
+                            print_cmd = ["lpr", "-P", "default", tmp_pdf.name]
+                            print_result = subprocess.run(print_cmd, capture_output=True, text=True, timeout=30)
+                            
+                            if print_result.returncode == 0:
+                                logger.info("✅ Summary printed via PDF conversion successfully")
+                                os.unlink(tmp_pdf.name)  # Clean up
+                                return
+                        
+                        os.unlink(tmp_pdf.name)  # Clean up
+                except Exception as e:
+                    logger.warning(f"PDF conversion method failed: {e}")
+                
+                # Method 4: Open in Safari with print dialog
+                try:
+                    # Create AppleScript to open and print
+                    applescript = f'''
+                    tell application "Safari"
+                        activate
+                        open "{html_file_path}"
+                        delay 2
+                        tell application "System Events"
+                            keystroke "p" using command down
+                        end tell
+                    end tell
+                    '''
+                    
+                    cmd = ["osascript", "-e", applescript]
+                    subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+                    logger.info("📄 Summary opened in Safari with print dialog")
+                    return
+                    
+                except Exception as e:
+                    logger.warning(f"Safari AppleScript method failed: {e}")
+                
+                # Method 5: Simple Safari open as fallback
+                try:
                     cmd = ["open", "-a", "Safari", html_file_path]
-                    subprocess.run(cmd)
-                    logger.info("📄 Summary opened in browser for manual printing")
+                    subprocess.run(cmd, timeout=10)
+                    logger.info("📄 Summary opened in Safari for manual printing")
+                    return
+                except Exception as e:
+                    logger.warning(f"Safari open failed: {e}")
                     
             elif system == "Windows":
-                # Use Windows print command
-                cmd = ["print", "/D:default", html_file_path]
-                result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+                # Windows methods
                 
-                if result.returncode == 0:
-                    logger.info("✅ Summary sent to default printer successfully")
-                else:
-                    # Try alternative method - open with default browser
+                # Method 1: Try Windows print command
+                try:
+                    cmd = ["print", "/D:default", html_file_path]
+                    result = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=30)
+                    
+                    if result.returncode == 0:
+                        logger.info("✅ Summary sent to default printer successfully")
+                        return
+                    else:
+                        logger.warning(f"Windows print failed: {result.stderr}")
+                except Exception as e:
+                    logger.warning(f"Windows print method failed: {e}")
+                
+                # Method 2: PowerShell printing
+                try:
+                    ps_script = f'Start-Process -FilePath "{html_file_path}" -Verb Print -WindowStyle Hidden'
+                    cmd = ["powershell", "-Command", ps_script]
+                    result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+                    
+                    if result.returncode == 0:
+                        logger.info("✅ Summary sent to printer via PowerShell successfully")
+                        return
+                except Exception as e:
+                    logger.warning(f"PowerShell print method failed: {e}")
+                
+                # Method 3: Open with default browser
+                try:
                     import webbrowser
                     webbrowser.open(html_file_path)
-                    logger.info("📄 Summary opened in browser for manual printing")
+                    logger.info("📄 Summary opened in default browser for manual printing")
+                    return
+                except Exception as e:
+                    logger.warning(f"Browser open failed: {e}")
                     
             elif system == "Linux":
-                # Use Linux print command
-                cmd = ["lp", "-d", "default", "-o", "media=A5", html_file_path]
-                result = subprocess.run(cmd, capture_output=True, text=True)
+                # Linux methods
                 
-                if result.returncode == 0:
-                    logger.info("✅ Summary sent to default printer successfully")
-                else:
-                    # Try alternative method - open with default browser
+                # Method 1: Try CUPS lp command
+                try:
+                    cmd = ["lp", "-d", "default", "-o", "media=A5", "-o", "fit-to-page", html_file_path]
+                    result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+                    
+                    if result.returncode == 0:
+                        logger.info("✅ Summary sent to default printer via CUPS successfully")
+                        return
+                    else:
+                        logger.warning(f"CUPS lp failed: {result.stderr}")
+                except Exception as e:
+                    logger.warning(f"CUPS method failed: {e}")
+                
+                # Method 2: Try lpr command
+                try:
+                    cmd = ["lpr", "-P", "default", "-o", "media=A5", html_file_path]
+                    result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+                    
+                    if result.returncode == 0:
+                        logger.info("✅ Summary sent to default printer via lpr successfully")
+                        return
+                    else:
+                        logger.warning(f"lpr failed: {result.stderr}")
+                except Exception as e:
+                    logger.warning(f"lpr method failed: {e}")
+                
+                # Method 3: Try wkhtmltopdf + lp
+                try:
+                    import tempfile
+                    with tempfile.NamedTemporaryFile(suffix='.pdf', delete=False) as tmp_pdf:
+                        pdf_cmd = ["wkhtmltopdf", "--page-size", "A5", html_file_path, tmp_pdf.name]
+                        pdf_result = subprocess.run(pdf_cmd, capture_output=True, text=True, timeout=30)
+                        
+                        if pdf_result.returncode == 0:
+                            print_cmd = ["lp", "-d", "default", tmp_pdf.name]
+                            print_result = subprocess.run(print_cmd, capture_output=True, text=True, timeout=30)
+                            
+                            if print_result.returncode == 0:
+                                logger.info("✅ Summary printed via PDF conversion successfully")
+                                os.unlink(tmp_pdf.name)
+                                return
+                        
+                        os.unlink(tmp_pdf.name)
+                except Exception as e:
+                    logger.warning(f"PDF conversion method failed: {e}")
+                
+                # Method 4: Open with default browser
+                try:
                     import webbrowser
                     webbrowser.open(html_file_path)
-                    logger.info("📄 Summary opened in browser for manual printing")
+                    logger.info("📄 Summary opened in default browser for manual printing")
+                    return
+                except Exception as e:
+                    logger.warning(f"Browser open failed: {e}")
+            
+            # If all methods fail
+            logger.warning("All printing methods failed. Summary file is available for manual printing.")
+            logger.info(f"📄 Summary file location: {html_file_path}")
             
         except Exception as e:
-            logger.warning(f"Could not print summary automatically: {e}")
+            logger.error(f"Error in print summary function: {e}")
             logger.info(f"📄 Summary file available at: {html_file_path}")
+    
     
     async def start(self):
         """Start the WebSocket client"""

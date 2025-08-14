@@ -1,0 +1,25 @@
+================================================================================
+                              Bil Plastik Ambalaj                               
+                               PALET ÖZET RAPORU                                
+================================================================================
+
+Palet ID: PLT2025001                    Durum: HAZIR
+Depo: Ana Fabrika Deposu                Sipariş Tarihi: 2025-08-12
+Teslim Alacak Firma: ABC Plastik Ltd. Şti.
+
+--------------------------------------------------------------------------------
+PALET İÇERİĞİ (3 Kalem)
+--------------------------------------------------------------------------------
+Kod          Ürün Adı                  Adet   Birim  B.Ağ.    T.Ağ.    Lot     
+--------------------------------------------------------------------------------
+PE001        PE Granül Doğal Renksiz   50     kg     1.00     50.00    LOT001A 
+PE002        PE Granül Siyah           25     kg     1.00     25.00    LOT001B 
+PE003        PE Granül Mavi            49     kg     1.00     49.00    LOT001C 
+--------------------------------------------------------------------------------
+TOPLAM KALEM: 3                         BRÜT AĞIRLIK: 125.50 kg
+NET AĞIRLIK: 124.00 kg                  DARA: 1.50 kg
+================================================================================
+
+Rapor Tarihi: 14.08.2025 09:49:27
+Hazırlayan: Operatör: Ahmet Y.
+Not: Kalite kontrol tamamlandı. Sevkiyata hazır.
