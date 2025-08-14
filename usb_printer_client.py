@@ -466,8 +466,8 @@ class WebSocketPrinterClient:
                 
                 # After successful ZPL printing, handle pallet summary if needed
                 if self._pending_pallet_summary and self._pending_pallet_summary['should_print']:
-                    logger.info("🔄 ZPL label printed successfully, now generating summary report...")
-                    await self._generate_and_save_pallet_summary(
+                    logger.info("🔄 ZPL label printed successfully, now printing summary directly...")
+                    await self._generate_and_print_pallet_summary(
                         self._pending_pallet_summary['data'],
                         self._pending_pallet_summary['job_id']
                     )
@@ -738,250 +738,188 @@ class WebSocketPrinterClient:
         except Exception as e:
             logger.error(f"Error handling health check: {e}")
     
-    async def _generate_and_save_pallet_summary(self, pallet_data: Dict[str, Any], job_id: str):
-        """Generate pallet summary in A5 format and save to file"""
+    async def _generate_and_print_pallet_summary(self, pallet_data: Dict[str, Any], job_id: str):
+        """Generate pallet summary in A5 format and print directly to default printer"""
         try:
-            logger.info(f"Generating pallet summary for job {job_id}")
+            logger.info(f"🖨️ Generating and printing pallet summary for job {job_id}")
             
             # Create summary generator
             summary_generator = get_pallet_summary_generator()
             
-            # Generate HTML summary (A5 format)
+            # Generate HTML summary (A5 format) for printing
             html_summary = summary_generator.generate_html_summary(pallet_data)
             
-            # Generate text summary (for basic printers)
-            text_summary = summary_generator.generate_text_summary(pallet_data)
-            
-            # Create output directory if it doesn't exist
-            import os
-            output_dir = "pallet_summaries"
-            if not os.path.exists(output_dir):
-                os.makedirs(output_dir)
-            
-            # Get pallet ID for filename
+            # Get pallet ID for temporary filename
             pallet_id = pallet_data.get('palet_id', pallet_data.get('pallet_id', job_id))
             timestamp = time.strftime('%Y%m%d_%H%M%S')
             
-            # Save HTML version
-            html_filename = f"{output_dir}/pallet_summary_{pallet_id}_{timestamp}.html"
-            with open(html_filename, 'w', encoding='utf-8') as f:
-                f.write(html_summary)
-            
-            # Save text version
-            txt_filename = f"{output_dir}/pallet_summary_{pallet_id}_{timestamp}.txt"
-            with open(txt_filename, 'w', encoding='utf-8') as f:
-                f.write(text_summary)
-            
-            logger.info(f"✅ Pallet summary saved:")
-            logger.info(f"   HTML: {html_filename}")
-            logger.info(f"   Text: {txt_filename}")
-            
-            # Try to print HTML version if default printer is available
-            await self._print_summary_to_default_printer(html_filename)
+            # Print directly to default printer without permanent storage
+            await self._print_html_summary_directly(html_summary, pallet_id, timestamp)
             
         except Exception as e:
-            logger.error(f"Error generating pallet summary: {e}")
+            logger.error(f"Error generating and printing pallet summary: {e}")
     
-    async def _print_summary_to_default_printer(self, html_file_path: str):
-        """Print the HTML summary to the default system printer"""
+    async def _print_html_summary_directly(self, html_content: str, pallet_id: str, timestamp: str):
+        """Print HTML summary directly to default printer without saving permanently"""
         try:
             import subprocess
             import platform
+            import tempfile
             import os
             
             system = platform.system()
-            logger.info(f"Attempting to print summary on {system}")
+            logger.info(f"🖨️ Printing summary directly on {system}")
             
-            # First, check if file exists
-            if not os.path.exists(html_file_path):
-                logger.error(f"HTML file not found: {html_file_path}")
-                return
+            # Create a temporary file for printing only
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.html', delete=False, encoding='utf-8') as temp_file:
+                temp_file.write(html_content)
+                temp_html_path = temp_file.name
             
-            if system == "Darwin":  # macOS
-                # Try multiple methods for macOS
+            try:
+                success = False
                 
-                # Method 1: Try lpr with A5 format
-                try:
-                    cmd = ["lpr", "-P", "default", "-o", "media=A5", "-o", "fit-to-page", html_file_path]
-                    result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
-                    
-                    if result.returncode == 0:
-                        logger.info("✅ Summary sent to default printer via lpr successfully")
-                        return
-                    else:
-                        logger.warning(f"lpr failed: {result.stderr}")
-                except Exception as e:
-                    logger.warning(f"lpr method failed: {e}")
-                
-                # Method 2: Try CUPS printing
-                try:
-                    cmd = ["lp", "-d", "default", "-o", "media=A5", "-o", "fit-to-page", html_file_path]
-                    result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
-                    
-                    if result.returncode == 0:
-                        logger.info("✅ Summary sent to default printer via CUPS successfully")
-                        return
-                    else:
-                        logger.warning(f"CUPS lp failed: {result.stderr}")
-                except Exception as e:
-                    logger.warning(f"CUPS method failed: {e}")
-                
-                # Method 3: Convert to PDF and print
-                try:
-                    import tempfile
-                    with tempfile.NamedTemporaryFile(suffix='.pdf', delete=False) as tmp_pdf:
-                        # Use wkhtmltopdf if available
-                        pdf_cmd = ["wkhtmltopdf", "--page-size", "A5", "--encoding", "UTF-8", html_file_path, tmp_pdf.name]
-                        pdf_result = subprocess.run(pdf_cmd, capture_output=True, text=True, timeout=30)
+                if system == "Darwin":  # macOS
+                    # Method 1: Direct print with lpr
+                    try:
+                        cmd = ["lpr", "-P", "default", "-o", "media=A5", "-o", "fit-to-page", "-J", f"Pallet_Summary_{pallet_id}", temp_html_path]
+                        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
                         
-                        if pdf_result.returncode == 0:
-                            # Print the PDF
-                            print_cmd = ["lpr", "-P", "default", tmp_pdf.name]
-                            print_result = subprocess.run(print_cmd, capture_output=True, text=True, timeout=30)
+                        if result.returncode == 0:
+                            logger.info("✅ Summary printed directly via lpr")
+                            success = True
+                        else:
+                            logger.debug(f"lpr failed: {result.stderr}")
+                    except Exception as e:
+                        logger.debug(f"lpr method failed: {e}")
+                    
+                    if not success:
+                        # Method 2: CUPS printing
+                        try:
+                            cmd = ["lp", "-d", "default", "-o", "media=A5", "-o", "fit-to-page", "-t", f"Pallet_Summary_{pallet_id}", temp_html_path]
+                            result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
                             
-                            if print_result.returncode == 0:
-                                logger.info("✅ Summary printed via PDF conversion successfully")
-                                os.unlink(tmp_pdf.name)  # Clean up
-                                return
-                        
-                        os.unlink(tmp_pdf.name)  # Clean up
-                except Exception as e:
-                    logger.warning(f"PDF conversion method failed: {e}")
-                
-                # Method 4: Open in Safari with print dialog
-                try:
-                    # Create AppleScript to open and print
-                    applescript = f'''
-                    tell application "Safari"
-                        activate
-                        open "{html_file_path}"
-                        delay 2
-                        tell application "System Events"
-                            keystroke "p" using command down
-                        end tell
-                    end tell
-                    '''
+                            if result.returncode == 0:
+                                logger.info("✅ Summary printed directly via CUPS")
+                                success = True
+                            else:
+                                logger.debug(f"CUPS failed: {result.stderr}")
+                        except Exception as e:
+                            logger.debug(f"CUPS method failed: {e}")
                     
-                    cmd = ["osascript", "-e", applescript]
-                    subprocess.run(cmd, capture_output=True, text=True, timeout=10)
-                    logger.info("📄 Summary opened in Safari with print dialog")
-                    return
+                    if not success:
+                        # Method 3: Convert to PDF and print
+                        try:
+                            with tempfile.NamedTemporaryFile(suffix='.pdf', delete=False) as temp_pdf:
+                                pdf_cmd = ["wkhtmltopdf", "--page-size", "A5", "--encoding", "UTF-8", temp_html_path, temp_pdf.name]
+                                pdf_result = subprocess.run(pdf_cmd, capture_output=True, text=True, timeout=30)
+                                
+                                if pdf_result.returncode == 0:
+                                    print_cmd = ["lpr", "-P", "default", "-J", f"Pallet_Summary_{pallet_id}", temp_pdf.name]
+                                    print_result = subprocess.run(print_cmd, capture_output=True, text=True, timeout=30)
+                                    
+                                    if print_result.returncode == 0:
+                                        logger.info("✅ Summary printed via PDF conversion")
+                                        success = True
+                                
+                                os.unlink(temp_pdf.name)  # Clean up PDF
+                        except Exception as e:
+                            logger.debug(f"PDF conversion failed: {e}")
                     
-                except Exception as e:
-                    logger.warning(f"Safari AppleScript method failed: {e}")
-                
-                # Method 5: Simple Safari open as fallback
-                try:
-                    cmd = ["open", "-a", "Safari", html_file_path]
-                    subprocess.run(cmd, timeout=10)
-                    logger.info("📄 Summary opened in Safari for manual printing")
-                    return
-                except Exception as e:
-                    logger.warning(f"Safari open failed: {e}")
-                    
-            elif system == "Windows":
-                # Windows methods
-                
-                # Method 1: Try Windows print command
-                try:
-                    cmd = ["print", "/D:default", html_file_path]
-                    result = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=30)
-                    
-                    if result.returncode == 0:
-                        logger.info("✅ Summary sent to default printer successfully")
-                        return
-                    else:
-                        logger.warning(f"Windows print failed: {result.stderr}")
-                except Exception as e:
-                    logger.warning(f"Windows print method failed: {e}")
-                
-                # Method 2: PowerShell printing
-                try:
-                    ps_script = f'Start-Process -FilePath "{html_file_path}" -Verb Print -WindowStyle Hidden'
-                    cmd = ["powershell", "-Command", ps_script]
-                    result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
-                    
-                    if result.returncode == 0:
-                        logger.info("✅ Summary sent to printer via PowerShell successfully")
-                        return
-                except Exception as e:
-                    logger.warning(f"PowerShell print method failed: {e}")
-                
-                # Method 3: Open with default browser
-                try:
-                    import webbrowser
-                    webbrowser.open(html_file_path)
-                    logger.info("📄 Summary opened in default browser for manual printing")
-                    return
-                except Exception as e:
-                    logger.warning(f"Browser open failed: {e}")
-                    
-            elif system == "Linux":
-                # Linux methods
-                
-                # Method 1: Try CUPS lp command
-                try:
-                    cmd = ["lp", "-d", "default", "-o", "media=A5", "-o", "fit-to-page", html_file_path]
-                    result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
-                    
-                    if result.returncode == 0:
-                        logger.info("✅ Summary sent to default printer via CUPS successfully")
-                        return
-                    else:
-                        logger.warning(f"CUPS lp failed: {result.stderr}")
-                except Exception as e:
-                    logger.warning(f"CUPS method failed: {e}")
-                
-                # Method 2: Try lpr command
-                try:
-                    cmd = ["lpr", "-P", "default", "-o", "media=A5", html_file_path]
-                    result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
-                    
-                    if result.returncode == 0:
-                        logger.info("✅ Summary sent to default printer via lpr successfully")
-                        return
-                    else:
-                        logger.warning(f"lpr failed: {result.stderr}")
-                except Exception as e:
-                    logger.warning(f"lpr method failed: {e}")
-                
-                # Method 3: Try wkhtmltopdf + lp
-                try:
-                    import tempfile
-                    with tempfile.NamedTemporaryFile(suffix='.pdf', delete=False) as tmp_pdf:
-                        pdf_cmd = ["wkhtmltopdf", "--page-size", "A5", html_file_path, tmp_pdf.name]
-                        pdf_result = subprocess.run(pdf_cmd, capture_output=True, text=True, timeout=30)
-                        
-                        if pdf_result.returncode == 0:
-                            print_cmd = ["lp", "-d", "default", tmp_pdf.name]
-                            print_result = subprocess.run(print_cmd, capture_output=True, text=True, timeout=30)
+                    if not success:
+                        # Method 4: AppleScript direct print
+                        try:
+                            applescript = f'''
+                            tell application "System Events"
+                                set htmlFile to "{temp_html_path}"
+                                do shell script "open -a Safari " & quoted form of htmlFile
+                                delay 3
+                                tell application "Safari"
+                                    activate
+                                end tell
+                                delay 1
+                                keystroke "p" using command down
+                                delay 2
+                                keystroke return
+                            end tell
+                            '''
                             
-                            if print_result.returncode == 0:
-                                logger.info("✅ Summary printed via PDF conversion successfully")
-                                os.unlink(tmp_pdf.name)
-                                return
-                        
-                        os.unlink(tmp_pdf.name)
-                except Exception as e:
-                    logger.warning(f"PDF conversion method failed: {e}")
+                            cmd = ["osascript", "-e", applescript]
+                            subprocess.run(cmd, capture_output=True, text=True, timeout=15)
+                            logger.info("📄 Summary sent to Safari for automatic printing")
+                            success = True
+                        except Exception as e:
+                            logger.debug(f"AppleScript method failed: {e}")
                 
-                # Method 4: Open with default browser
+                elif system == "Windows":
+                    # Method 1: Windows direct print
+                    try:
+                        cmd = ["print", "/D:default", temp_html_path]
+                        result = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=30)
+                        
+                        if result.returncode == 0:
+                            logger.info("✅ Summary printed directly on Windows")
+                            success = True
+                    except Exception as e:
+                        logger.debug(f"Windows print failed: {e}")
+                    
+                    if not success:
+                        # Method 2: PowerShell printing
+                        try:
+                            ps_script = f'''
+                            $IE = New-Object -ComObject InternetExplorer.Application
+                            $IE.Navigate("{temp_html_path}")
+                            $IE.Visible = $false
+                            while($IE.Busy) {{ Start-Sleep -Milliseconds 100 }}
+                            $IE.ExecWB(6,2)
+                            $IE.Quit()
+                            '''
+                            cmd = ["powershell", "-Command", ps_script]
+                            result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+                            
+                            if result.returncode == 0:
+                                logger.info("✅ Summary printed via PowerShell")
+                                success = True
+                        except Exception as e:
+                            logger.debug(f"PowerShell print failed: {e}")
+                
+                elif system == "Linux":
+                    # Method 1: CUPS direct print
+                    try:
+                        cmd = ["lp", "-d", "default", "-o", "media=A5", "-o", "fit-to-page", "-t", f"Pallet_Summary_{pallet_id}", temp_html_path]
+                        result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+                        
+                        if result.returncode == 0:
+                            logger.info("✅ Summary printed directly via CUPS on Linux")
+                            success = True
+                    except Exception as e:
+                        logger.debug(f"Linux CUPS failed: {e}")
+                    
+                    if not success:
+                        # Method 2: lpr direct print
+                        try:
+                            cmd = ["lpr", "-P", "default", "-o", "media=A5", "-J", f"Pallet_Summary_{pallet_id}", temp_html_path]
+                            result = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+                            
+                            if result.returncode == 0:
+                                logger.info("✅ Summary printed directly via lpr on Linux")
+                                success = True
+                        except Exception as e:
+                            logger.debug(f"Linux lpr failed: {e}")
+                
+                if not success:
+                    logger.warning("⚠️ Direct printing failed. Could not print summary automatically.")
+                else:
+                    logger.info(f"🎯 Pallet summary for {pallet_id} sent to printer successfully")
+                
+            finally:
+                # Clean up temporary file
                 try:
-                    import webbrowser
-                    webbrowser.open(html_file_path)
-                    logger.info("📄 Summary opened in default browser for manual printing")
-                    return
-                except Exception as e:
-                    logger.warning(f"Browser open failed: {e}")
-            
-            # If all methods fail
-            logger.warning("All printing methods failed. Summary file is available for manual printing.")
-            logger.info(f"📄 Summary file location: {html_file_path}")
-            
+                    os.unlink(temp_html_path)
+                except:
+                    pass
+                    
         except Exception as e:
-            logger.error(f"Error in print summary function: {e}")
-            logger.info(f"📄 Summary file available at: {html_file_path}")
-    
+            logger.error(f"Error printing summary directly: {e}")
     
     async def start(self):
         """Start the WebSocket client"""
