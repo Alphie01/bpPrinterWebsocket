@@ -144,17 +144,47 @@ class PalletPDFGenerator:
     def generate_pdf_summary(self, pallet_data: Dict[str, Any]) -> str:
         """Generate PDF summary for pallet data"""
         
-        # Extract data with fallbacks
-        pallet_id = pallet_data.get('palet_id', pallet_data.get('id', 'UNKNOWN'))
+        # Extract data with fallbacks - updated for new backend format
+        # Check if we have the new nested structure
+        pallet_info = pallet_data.get('palletInfo', {})
+        summary = pallet_data.get('summary', {})
+        stock_details = pallet_data.get('stockDetails', [])
+        grouped_products = pallet_data.get('groupedProducts', [])
+        
+        # Extract pallet information
+        pallet_id = pallet_info.get('id', pallet_data.get('palet_id', 'UNKNOWN'))
+        barcode = pallet_info.get('barcode', pallet_data.get('barcode', ''))
+        pallet_type = pallet_info.get('type', 'UNKNOWN')
+        status = pallet_info.get('status', pallet_data.get('status', 'UNKNOWN'))
+        current_weight = pallet_info.get('currentWeight', pallet_data.get('currentWeight', 0))
+        
+        # Location information
+        location_info = pallet_info.get('location', {})
+        warehouse = location_info.get('name', pallet_data.get('warehouse', 'Ana Depo'))
+        
+        # Company and other info with fallbacks
         company_name = pallet_data.get('firma_adi', pallet_data.get('company_name', 'Bil Plastik Ambalaj'))
-        warehouse = pallet_data.get('depo_adi', pallet_data.get('warehouse', 'Ana Depo'))
         receiving_company = pallet_data.get('teslim_firma', pallet_data.get('receiving_company', '-'))
-        order_date = pallet_data.get('siparis_tarihi', pallet_data.get('order_date', datetime.now().strftime('%Y-%m-%d')))
-        status = pallet_data.get('durum', pallet_data.get('status', 'UNKNOWN'))
+        order_date = pallet_data.get('printedAt', pallet_data.get('order_date', datetime.now().strftime('%Y-%m-%d')))
+        
+        # Format order_date if it's ISO format
+        try:
+            if 'T' in str(order_date):
+                from datetime import datetime
+                parsed_date = datetime.fromisoformat(order_date.replace('Z', '+00:00'))
+                order_date = parsed_date.strftime('%Y-%m-%d %H:%M')
+        except:
+            pass
         
         # Weight information
-        total_weight = float(pallet_data.get('brut_kg', pallet_data.get('currentWeight', 0)))
+        total_weight = float(current_weight)
         net_weight = float(pallet_data.get('net_kg', pallet_data.get('net_weight', total_weight)))
+        
+        # Summary information
+        total_stock_items = summary.get('totalStockItems', len(stock_details))
+        total_product_types = summary.get('totalProductTypes', len(grouped_products))
+        total_quantity = summary.get('totalQuantity', 0)
+        utilization_percentage = summary.get('utilizationPercentage', 0)
         
         # Generate filename
         timestamp = time.strftime('%Y%m%d_%H%M%S')
@@ -181,8 +211,9 @@ class PalletPDFGenerator:
         # Basic information table with encoded text
         basic_info = [
             [self._encode_text('Palet ID:'), str(pallet_id), self._encode_text('Durum:'), self._encode_text(status)],
-            [self._encode_text('Depo:'), self._encode_text(warehouse), self._encode_text('Tarih:'), order_date],
-            [self._encode_text('Teslim Alacak:'), self._encode_text(receiving_company), '', ''],
+            [self._encode_text('Barkod:'), str(barcode), self._encode_text('Tip:'), self._encode_text(pallet_type)],
+            [self._encode_text('Depo:'), self._encode_text(warehouse), self._encode_text('Tarih:'), str(order_date)],
+            [self._encode_text('Toplam Ürün:'), str(total_product_types), self._encode_text('Toplam Stok:'), str(total_stock_items)],
         ]
         
         basic_table = Table(basic_info, colWidths=[25*mm, 35*mm, 20*mm, 30*mm])
@@ -200,12 +231,13 @@ class PalletPDFGenerator:
         story.append(basic_table)
         story.append(Spacer(1, 10))
         
-        # Weight information with encoded text
-        story.append(Paragraph(self._encode_text("AĞIRLIK BİLGİLERİ"), self.header_style))
+        # Weight and summary information
+        story.append(Paragraph(self._encode_text("AĞIRLIK VE ÖZET BİLGİLERİ"), self.header_style))
         
         weight_info = [
-            [self._encode_text('Brüt Ağırlık:'), f"{total_weight:.2f} kg"],
-            [self._encode_text('Net Ağırlık:'), f"{net_weight:.2f} kg"],
+            [self._encode_text('Toplam Ağırlık:'), f"{total_weight:.2f} kg"],
+            [self._encode_text('Toplam Miktar:'), f"{total_quantity}"],
+            [self._encode_text('Kullanım Oranı:'), f"{utilization_percentage:.1f}%"],
         ]
         
         weight_table = Table(weight_info, colWidths=[40*mm, 30*mm])
@@ -222,31 +254,73 @@ class PalletPDFGenerator:
         story.append(weight_table)
         story.append(Spacer(1, 10))
         
-        # Items if available
-        items = pallet_data.get('items', [])
-        if items:
-            story.append(Paragraph(self._encode_text("İÇERİK DETAYI"), self.header_style))
+        # Grouped products summary
+        if grouped_products:
+            story.append(Paragraph(self._encode_text("ÜRÜN GRUPLARI ÖZETİ"), self.header_style))
             
-            # Items table with encoded headers
-            items_data = [[
-                self._encode_text('Ürün Adı'), 
-                self._encode_text('Miktar'), 
-                self._encode_text('Lot No')
+            # Products table with encoded headers
+            products_data = [[
+                self._encode_text('Ürün Kodu'), 
+                self._encode_text('Birim'), 
+                self._encode_text('Toplam Miktar'),
+                self._encode_text('Stok Sayısı')
             ]]
             
-            for item in items:
-                name = item.get('name', item.get('product_name', '-'))
-                weight = item.get('weight', item.get('quantity', '-'))
-                lot = item.get('lot', item.get('lot_number', '-'))
-                items_data.append([
-                    self._encode_text(str(name)), 
-                    str(weight), 
-                    str(lot)
+            for product in grouped_products:
+                product_code = product.get('productCode', '-')
+                unit = product.get('unit', '-')
+                total_qty = product.get('totalQuantity', 0)
+                stock_count = product.get('stockCount', 0)
+                
+                products_data.append([
+                    self._encode_text(str(product_code)), 
+                    str(unit), 
+                    str(total_qty),
+                    str(stock_count)
                 ])
             
-            items_table = Table(items_data, colWidths=[50*mm, 25*mm, 35*mm])
-            items_table.setStyle(self.table_style)
-            story.append(items_table)
+            products_table = Table(products_data, colWidths=[30*mm, 20*mm, 25*mm, 25*mm])
+            products_table.setStyle(self.table_style)
+            story.append(products_table)
+            story.append(Spacer(1, 10))
+        
+        # Detailed stock information (limited to first 5 items to save space)
+        if stock_details:
+            story.append(Paragraph(self._encode_text("DETAYЛИ STOK BİLGİLERİ"), self.header_style))
+            
+            # Stock details table with encoded headers
+            stock_data = [[
+                self._encode_text('Ürün Kodu'), 
+                self._encode_text('Lot No'), 
+                self._encode_text('Miktar'),
+                self._encode_text('Durum')
+            ]]
+            
+            # Show only first 5 items to keep PDF readable
+            for stock in stock_details[:5]:
+                product_code = stock.get('productCode', '-')
+                lot_number = stock.get('lotNumber', '-')
+                quantity = stock.get('quantity', 0)
+                unit = stock.get('unit', '')
+                stock_status = stock.get('status', '-')
+                
+                stock_data.append([
+                    self._encode_text(str(product_code)), 
+                    str(lot_number), 
+                    f"{quantity} {unit}",
+                    self._encode_text(str(stock_status))
+                ])
+            
+            # Add note if there are more items
+            if len(stock_details) > 5:
+                stock_data.append([
+                    self._encode_text(f"... ve {len(stock_details) - 5} adet daha"), 
+                    '', '', ''
+                ])
+            
+            stock_table = Table(stock_data, colWidths=[25*mm, 25*mm, 25*mm, 25*mm])
+            stock_table.setStyle(self.table_style)
+            story.append(stock_table)
         
         # Additional info with encoded text
         story.append(Spacer(1, 15))
