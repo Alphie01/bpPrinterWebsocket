@@ -394,6 +394,13 @@ class WebSocketPrinterClient:
             print(f"Label data keys: {list(label_data.keys())}")
             print(f"Label data length: {len(label_data)}")
             
+            # Check for new template system first
+            template = label_data.get('template')
+            if template:
+                logger.info(f"Using new template system with template: {template}")
+                return await self._process_template_job(job, template)
+            
+            # Legacy system - use 'type' field
             label_type = label_data.get('type', 'auto')
             
             logger.info(f"Processing print job {job.job_id} with type: {label_type}")
@@ -464,6 +471,50 @@ class WebSocketPrinterClient:
             
         except Exception as e:
             logger.error(f"Error processing print job: {e}")
+            return False
+    
+    async def _process_template_job(self, job: PrintJob, template: str) -> bool:
+        """Process print job using new template system"""
+        try:
+            label_data = job.label_data
+            
+            if template == 'pallet_label':
+                # ZPL thermal label printing only
+                logger.info("Processing pallet_label template - ZPL thermal printing only")
+                label_generator = get_label_generator("zpl")
+                zpl_command = label_generator.generate_pallet_label(label_data)
+                
+                if not zpl_command:
+                    logger.error("No ZPL command generated for pallet_label")
+                    return False
+                
+                # Send only to thermal printer
+                logger.info(f"Sending ZPL command to thermal printer (length: {len(zpl_command)} chars)")
+                success = self.printer.send_command(zpl_command)
+                
+                if success:
+                    logger.info(f"Pallet label printed successfully (job: {job.job_id})")
+                else:
+                    logger.error(f"Failed to print pallet label (job: {job.job_id})")
+                
+                return success
+                
+            elif template == 'pallet_content_list_a5':
+                # A5 summary printing to default printer only
+                logger.info("Processing pallet_content_list_a5 template - A5 summary printing only")
+                
+                # Generate and print only the summary
+                await self._generate_and_print_pallet_summary_only(label_data, job.job_id)
+                
+                logger.info(f"A5 summary printed successfully (job: {job.job_id})")
+                return True
+                
+            else:
+                logger.error(f"Unknown template: {template}")
+                return False
+                
+        except Exception as e:
+            logger.error(f"Error processing template job: {e}")
             return False
     
     def _generate_custom_label(self, label_data: Dict[str, Any]) -> str:
@@ -860,6 +911,43 @@ class WebSocketPrinterClient:
                 
         except Exception as e:
             logger.warning(f"Could not clean up PDF file {pdf_file_path}: {e}")
+    
+    async def _generate_and_print_pallet_summary_only(self, pallet_data: Dict[str, Any], job_id: str):
+        """Generate and print only A5 summary (no ZPL thermal label)"""
+        try:
+            logger.info(f"Generating A5 summary only for job {job_id}")
+            
+            # Create PDF generator
+            try:
+                from pdf_pallet_generator import get_pdf_pallet_generator
+                pdf_generator = get_pdf_pallet_generator()
+            except ImportError:
+                logger.error("PDF generator module not available")
+                return False
+            
+            # Generate PDF summary (A5 format)
+            timestamp = time.strftime("%Y%m%d_%H%M%S")
+            pallet_id = pallet_data.get('pallet_id', 'UNKNOWN')
+            pdf_file_name = f"pallet_summary_{pallet_id}_{timestamp}.pdf"
+            pdf_file_path = os.path.join(os.getcwd(), pdf_file_name)
+            
+            # Generate PDF with A5 format
+            success = pdf_generator.generate_pallet_summary_pdf(pallet_data, pdf_file_path)
+            
+            if not success:
+                logger.error("Failed to generate PDF summary")
+                return False
+            
+            logger.info(f"✅ PDF summary generated: {pdf_file_path}")
+            
+            # Print PDF to default printer
+            await self._print_pdf_to_default_printer(pdf_file_path)
+            
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error generating A5 summary only: {e}")
+            return False
     
     async def start(self):
         """Start the WebSocket client"""
