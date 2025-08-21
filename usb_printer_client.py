@@ -420,13 +420,13 @@ class WebSocketPrinterClient:
                 logger.info("Using direct ZPL command from label_data")
             elif label_type == 'pallet' or label_type == 'palet':
                 # Pallet label with specific data
-                logger.info("Generating pallet label using provided data")
+                """ logger.info("Generating pallet label using provided data")
                 label_generator = get_label_generator("zpl")
                 zpl_command = label_generator.generate_pallet_label(label_data)
                 
                 # Always generate and print pallet summary after ZPL label
                 logger.info("Generating pallet summary for default printer")
-                await self._generate_and_save_pallet_summary(label_data, job.job_id)
+                await self._generate_and_save_pallet_summary(label_data, job.job_id) """
             elif label_type == 'location':
                 # Location label with specific data
                 logger.info("Generating location label using provided data")
