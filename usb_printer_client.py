@@ -771,7 +771,8 @@ class WebSocketPrinterClient:
             
         except Exception as e:
             logger.error(f"Error handling health check: {e}")
-    
+
+    '''TODO : Implement PDF generation and saving'''
     async def _generate_and_save_pallet_summary(self, pallet_data: Dict[str, Any], job_id: str):
         """Generate pallet summary in A5 PDF format and print to Windows printer"""
         try:
@@ -928,16 +929,10 @@ class WebSocketPrinterClient:
                 logger.error("PDF generator module not available")
                 return False
             
-            # Generate PDF summary (A5 format)
-            timestamp = time.strftime("%Y%m%d_%H%M%S")
-            pallet_id = pallet_data.get('pallet_id', 'UNKNOWN')
-            pdf_file_name = f"pallet_summary_{pallet_id}_{timestamp}.pdf"
-            pdf_file_path = os.path.join(os.getcwd(), pdf_file_name)
+            # Generate PDF summary (A5 format) - returns filename
+            pdf_file_path = pdf_generator.generate_pdf_summary(pallet_data)
             
-            # Generate PDF with A5 format
-            success = pdf_generator.generate_pallet_summary_pdf(pallet_data, pdf_file_path)
-            
-            if not success:
+            if not pdf_file_path or not os.path.exists(pdf_file_path):
                 logger.error("Failed to generate PDF summary")
                 return False
             
