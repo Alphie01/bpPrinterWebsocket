@@ -469,11 +469,20 @@ class WebSocketPrinterClient:
         
         @self.sio.event
         async def print_job(data):
-            logger.info(f"Received print job: {data['jobId']}")
+            logger.info(f"Received print job: {data.get('jobId', 'unknown')}")
+            
+            # Extract template and data from new backend format
+            template = data.get('template', 'test_label')
+            print_data = data.get('data', {})
+            
+            # Create job object with template info
             job = PrintJob(
-                job_id=data['jobId'],
-                label_data=data['labelData'],
-                timestamp=data['timestamp'],
+                job_id=data.get('jobId', f"job_{int(time.time())}"),
+                label_data={
+                    'template': template,
+                    **print_data
+                },
+                timestamp=data.get('timestamp', time.strftime('%Y-%m-%d %H:%M:%S')),
                 requested_by=data.get('requestedBy')
             )
             await self.process_print_job(job)
@@ -497,35 +506,25 @@ class WebSocketPrinterClient:
         await self.sio.emit('register_printer', registration_data)
     
     async def process_print_job(self, job: PrintJob):
-        """Process a print job"""
+        """Process a print job based on template type"""
         try:
-            # Generate label commands based on template
             template = job.label_data.get('template', 'test_label')
+            logger.info(f"Processing job {job.job_id} with template: {template}")
             
-            if template == LabelTemplate.LOCATION.value:
-                commands = self.label_generator.generate_location_label(job.label_data)
-            elif template == LabelTemplate.PALLET.value:
-                commands = self.label_generator.generate_pallet_label(job.label_data)
-            elif template == LabelTemplate.TEST.value:
-                commands = self.label_generator.generate_test_label(job.label_data)
+            if template == 'pallet_label':
+                # ZPL thermal label printing only
+                await self._process_thermal_label(job)
+                
+            elif template == 'pallet_content_list_a5':
+                # A5 summary printing to default printer only
+                await self._process_a5_summary(job)
+                
+            elif template in [LabelTemplate.LOCATION.value, LabelTemplate.TEST.value]:
+                # Legacy ESC/POS thermal printing
+                await self._process_thermal_label(job)
+                
             else:
                 raise ValueError(f"Unknown template: {template}")
-            
-            # Send to printer
-            success = self.printer_interface.send_command(commands)
-            
-            # Send result back to server
-            result = {
-                'success': success,
-                'message': 'Label printed successfully' if success else 'Print job failed'
-            }
-            
-            await self.sio.emit(f'print_result_{job.job_id}', result)
-            
-            if success:
-                logger.info(f"Print job {job.job_id} completed successfully")
-            else:
-                logger.error(f"Print job {job.job_id} failed")
                 
         except Exception as e:
             logger.error(f"Error processing print job {job.job_id}: {e}")
@@ -534,6 +533,183 @@ class WebSocketPrinterClient:
                 'error': str(e)
             }
             await self.sio.emit(f'print_result_{job.job_id}', result)
+    
+    async def _process_thermal_label(self, job: PrintJob):
+        """Process thermal label printing (ZPL or ESC/POS)"""
+        try:
+            template = job.label_data.get('template', 'test_label')
+            
+            # Generate label commands based on template
+            if template == 'pallet_label':
+                # Use ZPL commands for pallet labels
+                commands = self._generate_zpl_pallet_label(job.label_data)
+            elif template == LabelTemplate.LOCATION.value:
+                commands = self.label_generator.generate_location_label(job.label_data)
+            elif template == LabelTemplate.TEST.value:
+                commands = self.label_generator.generate_test_label(job.label_data)
+            else:
+                # Default to pallet label for unknown thermal templates
+                commands = self.label_generator.generate_pallet_label(job.label_data)
+            
+            # Send to thermal printer
+            success = self.printer_interface.send_command(commands)
+            
+            # Send result back to server
+            result = {
+                'success': success,
+                'message': f'Thermal label printed successfully' if success else 'Thermal print job failed'
+            }
+            
+            await self.sio.emit(f'print_result_{job.job_id}', result)
+            
+            if success:
+                logger.info(f"Thermal print job {job.job_id} completed successfully")
+            else:
+                logger.error(f"Thermal print job {job.job_id} failed")
+                
+        except Exception as e:
+            logger.error(f"Error in thermal printing {job.job_id}: {e}")
+            raise
+    
+    async def _process_a5_summary(self, job: PrintJob):
+        """Process A5 summary printing to default printer"""
+        try:
+            # Generate A5 summary content
+            summary_content = self._generate_a5_summary_content(job.label_data)
+            
+            # Here you would implement the logic to send to default printer
+            # This could be platform-specific (Windows, macOS, Linux)
+            success = await self._print_to_default_printer(summary_content, job.job_id)
+            
+            # Send result back to server
+            result = {
+                'success': success,
+                'message': f'A5 summary printed successfully' if success else 'A5 summary print job failed'
+            }
+            
+            await self.sio.emit(f'print_result_{job.job_id}', result)
+            
+            if success:
+                logger.info(f"A5 summary print job {job.job_id} completed successfully")
+            else:
+                logger.error(f"A5 summary print job {job.job_id} failed")
+                
+        except Exception as e:
+            logger.error(f"Error in A5 summary printing {job.job_id}: {e}")
+            raise
+    
+    def _generate_zpl_pallet_label(self, data: Dict[str, Any]) -> str:
+        """Generate ZPL commands for pallet label"""
+        zpl_commands = []
+        
+        # Start ZPL format
+        zpl_commands.append("^XA")
+        
+        # Set label dimensions (adjust as needed)
+        zpl_commands.append("^LH0,0")  # Label Home
+        
+        # Print pallet ID
+        pallet_id = data.get('pallet_id', 'Unknown')
+        zpl_commands.append(f"^FO50,50^A0N,50,50^FD{pallet_id}^FS")
+        
+        # Print barcode if available
+        barcode = data.get('barcode', pallet_id)
+        zpl_commands.append(f"^FO50,120^BY3^BCN,100,Y,N,N^FD{barcode}^FS")
+        
+        # Print location
+        location = data.get('location', 'N/A')
+        zpl_commands.append(f"^FO50,250^A0N,30,30^FDLocation: {location}^FS")
+        
+        # Print timestamp
+        timestamp = data.get('timestamp', time.strftime('%Y-%m-%d %H:%M:%S'))
+        zpl_commands.append(f"^FO50,300^A0N,25,25^FD{timestamp}^FS")
+        
+        # End ZPL format
+        zpl_commands.append("^XZ")
+        
+        return "".join(zpl_commands)
+    
+    def _generate_a5_summary_content(self, data: Dict[str, Any]) -> str:
+        """Generate A5 summary content for pallet materials"""
+        content = []
+        
+        # Header
+        content.append("PALLET CONTENT SUMMARY")
+        content.append("=" * 50)
+        content.append("")
+        
+        # Pallet info
+        pallet_id = data.get('pallet_id', 'Unknown')
+        content.append(f"Pallet ID: {pallet_id}")
+        
+        location = data.get('location', 'N/A')
+        content.append(f"Location: {location}")
+        
+        timestamp = data.get('timestamp', time.strftime('%Y-%m-%d %H:%M:%S'))
+        content.append(f"Generated: {timestamp}")
+        content.append("")
+        
+        # Materials list
+        materials = data.get('materials', [])
+        if materials:
+            content.append("MATERIALS:")
+            content.append("-" * 30)
+            
+            for i, material in enumerate(materials, 1):
+                content.append(f"{i}. {material.get('description', 'Unknown Material')}")
+                content.append(f"   Code: {material.get('material_code', 'N/A')}")
+                content.append(f"   Quantity: {material.get('quantity', 0)} {material.get('unit', 'pcs')}")
+                content.append("")
+        else:
+            content.append("No materials found")
+        
+        content.append("=" * 50)
+        
+        return "\n".join(content)
+    
+    async def _print_to_default_printer(self, content: str, job_id: str) -> bool:
+        """Print content to default system printer (A5 format)"""
+        try:
+            import platform
+            import tempfile
+            import os
+            import subprocess
+            
+            # Create temporary file
+            with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False, encoding='utf-8') as temp_file:
+                temp_file.write(content)
+                temp_file_path = temp_file.name
+            
+            # Platform-specific printing
+            system = platform.system()
+            
+            if system == "Windows":
+                # Windows printing
+                subprocess.run(['notepad', '/p', temp_file_path], check=True)
+                success = True
+            elif system == "Darwin":  # macOS
+                # macOS printing with lpr
+                subprocess.run(['lpr', '-P', 'default', temp_file_path], check=True)
+                success = True
+            elif system == "Linux":
+                # Linux printing with lp
+                subprocess.run(['lp', '-d', 'default', temp_file_path], check=True)
+                success = True
+            else:
+                logger.warning(f"Unsupported platform for default printing: {system}")
+                success = False
+            
+            # Clean up temporary file
+            try:
+                os.unlink(temp_file_path)
+            except:
+                pass
+            
+            return success
+            
+        except Exception as e:
+            logger.error(f"Error printing to default printer: {e}")
+            return False
     
     async def connect_to_server(self):
         """Connect to WebSocket server"""

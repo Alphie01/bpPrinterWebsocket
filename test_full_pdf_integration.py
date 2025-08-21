@@ -79,7 +79,17 @@ async def test_full_pdf_workflow():
         
         # 2. Test Client Cleanup Method
         logger.info("\n🧹 Step 2: Testing PDF Cleanup...")
-        client = WebSocketPrinterClient()
+        
+        from usb_printer_client import USBPrinterConfig, PrinterType
+        
+        # Create dummy config for testing
+        config = USBPrinterConfig(
+            port_path="TEST",
+            baud_rate=9600,
+            printer_type=PrinterType.ZPL
+        )
+        
+        client = WebSocketPrinterClient("ws://test", config)
         
         # Create a copy for cleanup test
         test_cleanup_path = os.path.join(temp_dir, f"cleanup_test_{timestamp}.pdf")
@@ -129,12 +139,19 @@ async def test_platform_detection():
     """Test platform detection for printing"""
     
     try:
-        from usb_printer_client import WebSocketPrinterClient
+        from usb_printer_client import WebSocketPrinterClient, USBPrinterConfig, PrinterType
         
         logger.info("\n🖥️  Platform Detection Test")
         logger.info("-" * 30)
         
-        client = WebSocketPrinterClient()
+        # Create dummy config for testing
+        config = USBPrinterConfig(
+            port_path="TEST",
+            baud_rate=9600,
+            printer_type=PrinterType.ZPL
+        )
+        
+        client = WebSocketPrinterClient("ws://test", config)
         
         # Test platform detection
         import platform
