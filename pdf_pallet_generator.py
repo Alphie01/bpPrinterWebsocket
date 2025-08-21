@@ -170,7 +170,7 @@ class PalletPDFGenerator:
         # Format order_date if it's ISO format
         try:
             if 'T' in str(order_date):
-                from datetime import datetime
+                
                 parsed_date = datetime.fromisoformat(order_date.replace('Z', '+00:00'))
                 order_date = parsed_date.strftime('%Y-%m-%d %H:%M')
         except:
