@@ -327,7 +327,7 @@ class ZPLLabelGenerator(LabelGeneratorBase):
 ^FO20,350^FDSipariş Tarihi: {siparis_tarihi}^FS
 ^FO20,400^FDPalet ID: {palet_id}^FS
 ^FO20,450^FDDurum: {durum}^FS
-^FO20,500^FDNot: {not}^FS
+^FO20,500^FDNot: {note}^FS
 ^FO620,470^BQN,2,6^FDLA,{hammadde_ismi}^FS
 ^FO600,460^GB160,160,2^FS
 ^XZ"""
@@ -344,8 +344,7 @@ class ZPLLabelGenerator(LabelGeneratorBase):
             palet_id=palet_id,
             lot_no=lot_no,
             durum=durum,
-            brut_kg=brut_kg,
-            net_kg=net_kg
+            note= note
         )
         
         return zpl_command
