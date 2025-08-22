@@ -290,14 +290,13 @@ class ZPLLabelGenerator(LabelGeneratorBase):
         depo_adi = data.get('depo_adi', data.get('depo', 'Ana Fabrika'))
         locationId = data.get('locationId', data.get('locationId', 'Sevkiyat Ürün Deposu'))
         barcode = data.get('barcode', data.get('barcode', 'barcode'))
-        urun_adi = data.get('urun_adi', data.get('product_name', 'Ürün Adı'))
+        urun_adi = data.get('urun_adi', data.get('product_name', ''))
         teslim_firma = data.get('teslim_firma', data.get('receiving_company', 'Teslim Alınan Firma'))
         siparis_tarihi = data.get('siparis_tarihi', data.get('order_date', current_date))
         palet_id = data.get('palet_id', f'PLT{int(time.time())%10000:04d}')
         lot_no = data.get('lot_no', f'LOT{int(time.time())%1000:03d}')
         durum = data.get('durum', data.get('status', 'HAZIR'))
-        brut_kg = data.get('brut_kg', data.get('gross_weight', '25.0'))
-        net_kg = data.get('net_kg', data.get('net_weight', '24.5'))
+        note = data.get('note', data.get('note', ''))
         
         # Read the palet.zpl template
         try:
@@ -328,8 +327,7 @@ class ZPLLabelGenerator(LabelGeneratorBase):
 ^FO20,350^FDSipariş Tarihi: {siparis_tarihi}^FS
 ^FO20,400^FDPalet ID: {palet_id}^FS
 ^FO20,450^FDDurum: {durum}^FS
-^FO20,500^FDBrüt KG.: {brut_kg}^FS
-^FO20,550^FDNet KG.: {net_kg}^FS
+^FO20,500^FDNot: {not}^FS
 ^FO620,470^BQN,2,6^FDLA,{hammadde_ismi}^FS
 ^FO600,460^GB160,160,2^FS
 ^XZ"""

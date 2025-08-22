@@ -49,8 +49,7 @@
 ^A0N,30,30^FO20,350^FDSipariş Tarihi: {siparis_tarihi}^FS
 ^A0N,30,30^FO20,400^FDPalet ID: {palet_id}^FS
 ^A0N,30,30^FO20,450^FDDurum: {durum}^FS
-^A0N,30,30^FO20,500^FDBrüt KG.: {brut_kg}^FS
-^A0N,30,30^FO20,550^FDNet KG.: {net_kg}^FS
+^A0N,30,30^FO20,500^FDNot: {note}^FS
 
 ^FX QR Code section
 ^CF0,40
