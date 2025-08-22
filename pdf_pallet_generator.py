@@ -286,12 +286,12 @@ class PalletPDFGenerator:
         
         # Detailed stock information (limited to first 5 items to save space)
         if stock_details:
-            story.append(Paragraph(self._encode_text("DETAYЛИ STOK BİLGİLERİ"), self.header_style))
+            story.append(Paragraph(self._encode_text("DETAYLI STOK BİLGİLERİ"), self.header_style))
             
             # Stock details table with encoded headers
             stock_data = [[
                 self._encode_text('Ürün Kodu'), 
-                self._encode_text('Lot No'), 
+                self._encode_text('Ürün Adı'), 
                 self._encode_text('Miktar'),
                 self._encode_text('Durum')
             ]]
@@ -299,14 +299,14 @@ class PalletPDFGenerator:
             # Show only first 5 items to keep PDF readable
             for stock in stock_details[:5]:
                 product_code = stock.get('productCode', '-')
-                lot_number = stock.get('lotNumber', '-')
+                product_name = stock.get('productName', '-')
                 quantity = stock.get('quantity', 0)
                 unit = stock.get('unit', '')
                 stock_status = stock.get('status', '-')
                 
                 stock_data.append([
                     self._encode_text(str(product_code)), 
-                    str(lot_number), 
+                    str(product_name), 
                     f"{quantity} {unit}",
                     self._encode_text(str(stock_status))
                 ])
@@ -318,7 +318,7 @@ class PalletPDFGenerator:
                     '', '', ''
                 ])
             
-            stock_table = Table(stock_data, colWidths=[25*mm, 25*mm, 25*mm, 25*mm])
+            stock_table = Table(stock_data, colWidths=[25*mm, 50*mm, 25*mm, 25*mm])
             stock_table.setStyle(self.table_style)
             story.append(stock_table)
         
