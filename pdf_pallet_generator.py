@@ -298,8 +298,9 @@ class PalletPDFGenerator:
             
             # Show only first 5 items to keep PDF readable
             for stock in stock_details[:5]:
+                stockCard = stock.get('stockCard', {})
                 product_code = stock.get('productCode', '-')
-                product_name = stock.get('productName', '-')
+                product_name = stockCard.get('productName', '-')
                 quantity = stock.get('quantity', 0)
                 unit = stock.get('unit', '')
                 stock_status = stock.get('status', '-')
