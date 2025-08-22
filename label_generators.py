@@ -288,8 +288,8 @@ class ZPLLabelGenerator(LabelGeneratorBase):
         # Extract data with defaults matching the template placeholders
         firma_adi = data.get('firma_adi', data.get('firma', 'Bil Plastik Ambalaj'))
         depo_adi = data.get('depo_adi', data.get('depo', 'Ana Fabrika'))
-        sevkiyat_bilgisi = data.get('sevkiyat_bilgisi', data.get('sevkiyat', 'Sevkiyat Ürün Deposu'))
-        hammadde_ismi = data.get('hammadde_ismi', data.get('hammadde', 'Hammadde İsmi'))
+        locationId = data.get('locationId', data.get('locationId', 'Sevkiyat Ürün Deposu'))
+        barcode = data.get('barcode', data.get('barcode', 'barcode'))
         urun_adi = data.get('urun_adi', data.get('product_name', 'Ürün Adı'))
         teslim_firma = data.get('teslim_firma', data.get('receiving_company', 'Teslim Alınan Firma'))
         siparis_tarihi = data.get('siparis_tarihi', data.get('order_date', current_date))
@@ -338,8 +338,8 @@ class ZPLLabelGenerator(LabelGeneratorBase):
         zpl_command = zpl_template.format(
             firma_adi=firma_adi,
             depo_adi=depo_adi,
-            sevkiyat_bilgisi=sevkiyat_bilgisi,
-            hammadde_ismi=hammadde_ismi,
+            sevkiyat_bilgisi=locationId,
+            hammadde_ismi=barcode,
             urun_adi=urun_adi,
             teslim_firma=teslim_firma,
             siparis_tarihi=siparis_tarihi,
