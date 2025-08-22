@@ -56,7 +56,7 @@
 ^CF0,40
 ^FO620,430
 ^BQN,2,6
-^FDLA,{palet_id}-{lot_no}^FS
+^FDLA,{hammadde_ismi}^FS
 
 ^FO600,460^GB160,160,2^FS
 ^XZ

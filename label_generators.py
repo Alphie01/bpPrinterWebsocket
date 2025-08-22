@@ -330,7 +330,7 @@ class ZPLLabelGenerator(LabelGeneratorBase):
 ^FO20,450^FDDurum: {durum}^FS
 ^FO20,500^FDBrüt KG.: {brut_kg}^FS
 ^FO20,550^FDNet KG.: {net_kg}^FS
-^FO620,470^BQN,2,6^FDLA,{palet_id}-{lot_no}^FS
+^FO620,470^BQN,2,6^FDLA,{hammadde_ismi}^FS
 ^FO600,460^GB160,160,2^FS
 ^XZ"""
         
